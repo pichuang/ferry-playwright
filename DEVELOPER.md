@@ -27,7 +27,9 @@ ferry-playwright/
 │   ├── PlaywrightSampleApp/         # 被打包的範例應用（Channel="msedge"，支援 --ci）
 │   └── PlaywrightOfflinePackager/   # 打包工具
 ├── assets/
+│   ├── install.cmd                  # 雙擊執行的包裝（呼叫 install.ps1）
 │   ├── install.ps1                  # 目標機一鍵安裝腳本
+│   ├── uninstall.cmd                # 雙擊執行的包裝（呼叫 uninstall.ps1）
 │   ├── uninstall.ps1                # 解除安裝腳本
 │   └── README.txt                   # 給最終使用者（會包進 ZIP）
 ├── .github/
@@ -114,7 +116,9 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 │   ├── microsoft.aspnetcore.app.runtime.win-x64.10.0.7.nupkg
 │   ├── microsoft.netcore.app.host.win-x64.10.0.7.nupkg
 │   └── INDEX.txt
+├── install.cmd
 ├── install.ps1
+├── uninstall.cmd
 ├── uninstall.ps1
 ├── README.txt
 └── BUILD-INFO.txt
@@ -167,6 +171,9 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 
 ## install.ps1 / uninstall.ps1 設計
 
+- **雙擊體驗**：另附 `install.cmd` / `uninstall.cmd` 包裝，本質就是
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*` + `pause`。
+  使用者雙擊即可，UAC 提權沿用下面 .ps1 的 `Invoke-SelfElevate`。
 - **自我提權**：偵測非 Administrator 時用 `Start-Process -Verb RunAs` 重啟自己。
 - **Edge 檢查**：找 `Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
   或註冊機碼。可用 `-SkipEdgeCheck` 略過。

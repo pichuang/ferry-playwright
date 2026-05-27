@@ -176,7 +176,7 @@ try
     Console.WriteLine($" Output: {zipPath}");
     Console.WriteLine();
     Console.WriteLine(" Transfer this ZIP to the offline Windows machine,");
-    Console.WriteLine(" extract it, then right-click 'install.ps1' > Run with PowerShell (as Administrator).");
+    Console.WriteLine(" extract it, then double-click 'install.cmd'.");
     return 0;
 }
 catch (Exception ex)

@@ -5,8 +5,10 @@ What's in this folder
 ---------------------
   app\               Self-contained .NET application + Playwright driver
   nuget\             Offline NuGet package feed (Microsoft.Playwright + deps)
-  install.ps1        One-click installer (run as Administrator)
-  uninstall.ps1      Removes the application
+  install.cmd        Double-click to install (recommended for end users)
+  install.ps1        PowerShell installer (called by install.cmd)
+  uninstall.cmd      Double-click to uninstall
+  uninstall.ps1      PowerShell uninstaller (called by uninstall.cmd)
   BUILD-INFO.txt     Build metadata
   README.txt         This file
 
@@ -19,11 +21,11 @@ Prerequisites
 
 How to install
 --------------
-  1. Right-click 'install.ps1' and choose "Run with PowerShell".
-     (Or open an elevated PowerShell and run:
-         powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-     )
-  2. Accept the UAC prompt if it appears.
+  1. Double-click 'install.cmd' (recommended).
+     - Advanced users may instead right-click 'install.ps1' > "Run with PowerShell",
+       or open an elevated PowerShell and run:
+           powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+  2. Accept the UAC prompt when it appears.
   3. The script will:
        - Verify Windows version and Microsoft Edge.
        - Copy the application to "C:\Program Files\PlaywrightApp".
@@ -56,7 +58,7 @@ How to run
 
 How to uninstall
 ----------------
-  Right-click 'uninstall.ps1' and choose "Run with PowerShell" (as Administrator).
+  Double-click 'uninstall.cmd' (or right-click 'uninstall.ps1' > "Run with PowerShell").
 
 Troubleshooting
 ---------------

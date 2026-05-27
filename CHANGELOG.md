@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Double-click launchers `install.cmd` / `uninstall.cmd` so end users no
+  longer need to right-click the .ps1 files. The .cmd wrappers forward
+  arguments to the underlying PowerShell scripts and `pause` so the user
+  can read the output before the window closes.
 - Bundle the sample project's NuGet restore graph (`Microsoft.Playwright` and
   its dependencies) as `.nupkg` files inside the offline ZIP under `nuget/`.
 - New packager step `Stage NuGet packages` runs `dotnet restore --packages --runtime`
