@@ -6,6 +6,22 @@
 
 ---
 
+## 版本資訊
+
+| 項目 | 版本 |
+| --- | --- |
+| ferry-playwright | **v0.1.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| Microsoft.Playwright (.NET) | **1.60.0** |
+| .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
+| 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
+| 瀏覽器 | 系統內建 Microsoft Edge（`Channel = "msedge"`，不下載 Chromium / Firefox） |
+| 打包目標 RID | `win-x64` |
+
+> 想知道某份 ZIP 是哪一次打包的？解壓後看根目錄 `BUILD-INFO.txt`，
+> 內含 build 時間、RID 與 config。完整版本歷史請見 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
 ## 它能幫你做什麼
 
 如果你的場景符合以下任何一條，這個專案就是寫給你看的：
