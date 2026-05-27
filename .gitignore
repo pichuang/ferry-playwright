@@ -3,6 +3,7 @@ obj/
 output/
 *.user
 .vs/
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 .idea/
 *.zip
