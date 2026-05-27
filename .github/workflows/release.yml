@@ -178,7 +178,7 @@ jobs:
       - name: Extract ZIP
         shell: pwsh
         run: |
-          $zip = Get-ChildItem artifact/PlaywrightOffline-*.zip | Select-Object -First 1
+          $zip = Get-ChildItem -Path artifact -Recurse -Filter 'PlaywrightOffline-*.zip' | Select-Object -First 1
           if (-not $zip) { throw 'ZIP not found in artifact.' }
           Write-Host "Extracting $($zip.FullName)..."
           Expand-Archive -Path $zip.FullName -DestinationPath extracted -Force
@@ -322,10 +322,13 @@ jobs:
           set -euo pipefail
           ZIP=$(find artifact -type f -name 'PlaywrightOffline-*.zip' | head -1)
           NOTES=$(find artifact -type f -name 'release-notes.md' | head -1)
+          if [[ -z "$ZIP" ]]; then echo "::error::ZIP not found in artifact"; exit 1; fi
+          if [[ -z "$NOTES" ]]; then echo "::error::release-notes.md not found in artifact"; exit 1; fi
           mkdir -p release-assets
           cp "$ZIP"   release-assets/
           cp "$NOTES" release-assets/
           echo "ZIP=$(basename "$ZIP")" >> "$GITHUB_ENV"
+          ls -la release-assets/
 
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
