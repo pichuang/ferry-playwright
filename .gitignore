@@ -1,0 +1,8 @@
+bin/
+obj/
+output/
+*.user
+.vs/
+.vscode/
+.idea/
+*.zip

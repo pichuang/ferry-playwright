@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PlaywrightOfflinePackager/PlaywrightOfflinePackager.csproj" />
+    <Project Path="src/PlaywrightSampleApp/PlaywrightSampleApp.csproj" />
+  </Folder>
+</Solution>
