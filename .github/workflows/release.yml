@@ -1,0 +1,340 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional tag name to associate (no-op if not pushed). Leave empty for dry-run.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  package:
+    name: Package (ubuntu-latest)
+    runs-on: ubuntu-latest
+    outputs:
+      zip_name: ${{ steps.locate.outputs.zip_name }}
+      zip_sha256: ${{ steps.locate.outputs.zip_sha256 }}
+      zip_size_mb: ${{ steps.locate.outputs.zip_size_mb }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET (from global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          dotnet-quality: preview
+
+      - name: dotnet --info
+        run: dotnet --info
+
+      - name: Determine version
+        id: meta
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ github.event.inputs.tag }}" ]]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Run packager
+        run: dotnet run --project src/PlaywrightOfflinePackager -c Release
+
+      - name: Locate ZIP and compute SHA256
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP=$(ls -t output/PlaywrightOffline-*.zip | head -1)
+          if [[ -z "$ZIP" ]]; then
+            echo "::error::No ZIP produced under output/"
+            exit 1
+          fi
+          NAME=$(basename "$ZIP")
+          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          SIZE_MB=$(awk "BEGIN{printf \"%.2f\", $(stat -c%s "$ZIP") / 1048576}")
+          echo "zip_path=$ZIP"        >> "$GITHUB_OUTPUT"
+          echo "zip_name=$NAME"       >> "$GITHUB_OUTPUT"
+          echo "zip_sha256=$SHA"      >> "$GITHUB_OUTPUT"
+          echo "zip_size_mb=$SIZE_MB" >> "$GITHUB_OUTPUT"
+          echo "ZIP : $ZIP"
+          echo "SHA : $SHA"
+          echo "Size: ${SIZE_MB} MB"
+
+      - name: Verify ZIP contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="${{ steps.locate.outputs.zip_path }}"
+          for needle in "install.ps1" "uninstall.ps1" "README.txt" "app/.playwright/node/win32_x64/node.exe" "app/PlaywrightSampleApp.exe"; do
+            if unzip -l "$ZIP" | grep -qE "[[:space:]]${needle//./\\.}\$"; then
+              echo "  ✓ $needle"
+            else
+              echo "::error::Required entry missing from ZIP: $needle"
+              exit 1
+            fi
+          done
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.meta.outputs.version }}"
+          ZIP_NAME="${{ steps.locate.outputs.zip_name }}"
+          SHA="${{ steps.locate.outputs.zip_sha256 }}"
+          SIZE_MB="${{ steps.locate.outputs.zip_size_mb }}"
+
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${VERSION}\$" | head -1 || true)
+          {
+            echo "## Summary"
+            echo ""
+            echo "- **Version**: \`${VERSION}\`"
+            echo "- **Asset**: \`${ZIP_NAME}\`"
+            echo "- **Size**: ${SIZE_MB} MB"
+            echo "- **SHA256**: \`${SHA}\`"
+            echo "- **Built**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- **Source commit**: ${GITHUB_SHA}"
+            echo ""
+            echo "## Self-test results"
+            echo ""
+            echo "This release is built only after the \`verify-offline\` job has:"
+            echo "- Installed the package on a clean Windows Server 2022 runner"
+            echo "- Blocked **all** outbound network traffic via Windows Defender Firewall"
+            echo "- Successfully launched the sample application against \`about:blank\` headlessly"
+            echo "- Audited TCP connections and confirmed **no external network activity**"
+            echo ""
+            echo "## Changes"
+            echo ""
+            if [[ -n "$PREV_TAG" ]]; then
+              echo "Changes since \`${PREV_TAG}\`:"
+              echo ""
+              echo "### Commits"
+              echo ""
+              git log --pretty=format:'- %h %s (%an)' "${PREV_TAG}..HEAD" || true
+              echo ""
+              echo ""
+              echo "### Files"
+              echo ""
+              echo '```'
+              git diff --stat "${PREV_TAG}..HEAD" || true
+              echo '```'
+            else
+              echo "Initial release. Full commit history:"
+              echo ""
+              git log --pretty=format:'- %h %s (%an)' || true
+              echo ""
+            fi
+          } > release-notes.md
+
+          echo "----- release-notes.md -----"
+          cat release-notes.md
+          echo "----------------------------"
+
+      - name: Upload ZIP + release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-package
+          path: |
+            output/PlaywrightOffline-*.zip
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-offline:
+    name: Verify Offline Install (windows-2022)
+    runs-on: windows-2022
+    needs: package
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: offline-package
+          path: artifact
+
+      - name: List artifact
+        shell: pwsh
+        run: Get-ChildItem -Recurse artifact | Format-Table FullName, Length
+
+      - name: Extract ZIP
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem artifact/PlaywrightOffline-*.zip | Select-Object -First 1
+          if (-not $zip) { throw 'ZIP not found in artifact.' }
+          Write-Host "Extracting $($zip.FullName)..."
+          Expand-Archive -Path $zip.FullName -DestinationPath extracted -Force
+          Get-ChildItem extracted | Format-Table Name, Length
+
+      - name: Baseline — confirm runner currently has internet
+        shell: pwsh
+        run: |
+          $ok = Test-NetConnection -ComputerName www.microsoft.com -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue
+          if (-not $ok) {
+            throw 'Baseline failed: runner has no internet, so an offline test would falsely "pass". Aborting.'
+          }
+          Write-Host '✓ Baseline: internet reachable before firewall block.'
+
+      - name: Block all outbound traffic (Windows Defender Firewall)
+        shell: pwsh
+        run: |
+          Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultOutboundAction Block -DefaultInboundAction Block -Enabled True
+          # Allow loopback so local processes can still talk to themselves.
+          New-NetFirewallRule -DisplayName 'CI-Allow-Loopback-Out' -Direction Outbound -Action Allow -RemoteAddress 127.0.0.0/8 -Profile Any | Out-Null
+          New-NetFirewallRule -DisplayName 'CI-Allow-Loopback-In'  -Direction Inbound  -Action Allow -RemoteAddress 127.0.0.0/8 -Profile Any | Out-Null
+          Write-Host '✓ Outbound traffic blocked.'
+
+      - name: Verify firewall block is effective
+        shell: pwsh
+        run: |
+          $reachable = Test-NetConnection -ComputerName www.microsoft.com -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue
+          if ($reachable) {
+            throw 'Firewall block did not take effect — www.microsoft.com is still reachable. Cannot proceed with offline test.'
+          }
+          Write-Host '✓ Confirmed offline: external host unreachable.'
+
+      - name: Run install.ps1
+        shell: pwsh
+        working-directory: extracted
+        run: |
+          Write-Host 'Running install.ps1 (runner is already admin)...'
+          ./install.ps1
+          if (-not (Test-Path "$Env:ProgramFiles\PlaywrightApp\PlaywrightSampleApp.exe")) {
+            throw 'install.ps1 ran but PlaywrightSampleApp.exe is missing from install dir.'
+          }
+          Write-Host '✓ Installation completed.'
+
+      - name: Verify environment variables set
+        shell: pwsh
+        run: |
+          $skip = [Environment]::GetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', 'Machine')
+          $bp   = [Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH', 'Machine')
+          if ($skip -ne '1' -or $bp -ne '0') {
+            throw "Env vars not set as expected: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD='$skip' PLAYWRIGHT_BROWSERS_PATH='$bp'"
+          }
+          Write-Host '✓ Machine env vars set.'
+
+      - name: Snapshot TCP connections before run
+        shell: pwsh
+        run: |
+          $before = Get-NetTCPConnection | Select-Object LocalAddress,LocalPort,RemoteAddress,RemotePort,State,OwningProcess
+          $before | ConvertTo-Json -Depth 3 | Out-File -FilePath tcp-before.json -Encoding utf8
+          Write-Host "Captured $($before.Count) TCP connections before run."
+
+      - name: Run application in CI mode (headless, offline)
+        shell: pwsh
+        env:
+          CI: 'true'
+          PLAYWRIGHT_CI: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          PLAYWRIGHT_BROWSERS_PATH: '0'
+        run: |
+          $exe = "$Env:ProgramFiles\PlaywrightApp\PlaywrightSampleApp.exe"
+          Write-Host "Running: $exe --ci"
+          & $exe --ci
+          if ($LASTEXITCODE -ne 0) {
+            throw "Application exited with code $LASTEXITCODE — offline smoke test failed."
+          }
+          Write-Host '✓ Application ran successfully while offline.'
+
+      - name: Audit TCP connections after run (detect any external traffic)
+        shell: pwsh
+        run: |
+          $after = Get-NetTCPConnection | Select-Object LocalAddress,LocalPort,RemoteAddress,RemotePort,State,OwningProcess
+          $after | ConvertTo-Json -Depth 3 | Out-File -FilePath tcp-after.json -Encoding utf8
+
+          $external = $after | Where-Object {
+            $_.State -eq 'Established' -and
+            $_.RemoteAddress -and
+            $_.RemoteAddress -notmatch '^127\.' -and
+            $_.RemoteAddress -ne '::1' -and
+            $_.RemoteAddress -notmatch '^169\.254\.' -and    # link-local
+            $_.RemoteAddress -notmatch '^fe80::' -and        # IPv6 link-local
+            $_.RemoteAddress -ne '0.0.0.0' -and
+            $_.RemoteAddress -ne '::'
+          }
+
+          if ($external -and $external.Count -gt 0) {
+            Write-Host 'External connections detected:'
+            $external | Format-Table -AutoSize
+            throw "Offline contract VIOLATED: $($external.Count) external TCP connection(s) found."
+          }
+          Write-Host '✓ No external TCP connections detected during/after the offline test.'
+
+      - name: Upload network audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-audit
+          path: |
+            tcp-before.json
+            tcp-after.json
+          if-no-files-found: ignore
+
+      - name: Cleanup — restore firewall
+        if: always()
+        shell: pwsh
+        run: |
+          try {
+            Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultOutboundAction Allow -DefaultInboundAction Block
+            Get-NetFirewallRule -DisplayName 'CI-Allow-Loopback-Out' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+            Get-NetFirewallRule -DisplayName 'CI-Allow-Loopback-In'  -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+            Write-Host '✓ Firewall restored.'
+          } catch {
+            Write-Warning "Cleanup error: $_"
+          }
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [package, verify-offline]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: offline-package
+          path: artifact
+
+      - name: List downloaded files
+        run: ls -la artifact && find artifact -type f
+
+      - name: Move ZIP to flat path
+        run: |
+          set -euo pipefail
+          ZIP=$(find artifact -type f -name 'PlaywrightOffline-*.zip' | head -1)
+          NOTES=$(find artifact -type f -name 'release-notes.md' | head -1)
+          mkdir -p release-assets
+          cp "$ZIP"   release-assets/
+          cp "$NOTES" release-assets/
+          echo "ZIP=$(basename "$ZIP")" >> "$GITHUB_ENV"
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body_path: release-assets/release-notes.md
+          files: |
+            release-assets/PlaywrightOffline-*.zip
