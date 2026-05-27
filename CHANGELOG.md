@@ -12,16 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer need to right-click the .ps1 files. The .cmd wrappers forward
   arguments to the underlying PowerShell scripts and `pause` so the user
   can read the output before the window closes.
-- Bundle the sample project's NuGet restore graph (`Microsoft.Playwright` and
-  its dependencies) as `.nupkg` files inside the offline ZIP under `nuget/`.
-- New packager step `Stage NuGet packages` runs `dotnet restore --packages --runtime`
-  for the sample project, flattens the resulting `.nupkg` files, and writes
-  `nuget/INDEX.txt` listing them.
-- `install.ps1` now copies `nuget/` into `%InstallDir%\nuget` and writes a
-  machine-level `%ProgramData%\NuGet\NuGet.Config` that registers
-  `PlaywrightOfflineFeed`. Adds `-SkipNuGetFeed` and `-KeepNuGetOrg` switches.
-- `uninstall.ps1` removes the source entry (restoring any backed-up config) and
-  deletes the bundled `nuget/` folder.
 
 ## [0.1.0] - 2026-05-27
 

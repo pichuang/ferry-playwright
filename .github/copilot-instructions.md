@@ -84,17 +84,12 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   `Console.ReadLine()`, default URL is `about:blank`. Preserve this contract — the
   workflow's offline test depends on it.
 - **Packager pipeline order** (in `src/PlaywrightOfflinePackager/Program.cs`):
-  `Restore` → `Publish` → **`Verify Playwright driver present`** → `Stage NuGet packages`
-  → `Stage assets` → `Write BUILD-INFO.txt` → `Create ZIP`. The driver-presence
-  verification is the single most important guard — keep it. ZIP must include
-  `app/.playwright/node/win32_x64/node.exe` and `nuget/*.nupkg`.
+  `Restore` → `Publish` → **`Verify Playwright driver present`** → `Stage assets` →
+  `Write BUILD-INFO.txt` → `Create ZIP`. The driver-presence verification is the single
+  most important guard — keep it. ZIP must include `app/.playwright/node/win32_x64/node.exe`.
 - **install.ps1** self-elevates, requires Edge unless `-SkipEdgeCheck` is passed, installs
   to `%ProgramFiles%\PlaywrightApp`, sets *machine-scope* env vars, creates Start Menu +
-  Desktop shortcuts, and writes a machine-level `%ProgramData%\NuGet\NuGet.Config` that
-  registers `PlaywrightOfflineFeed` pointing at `%InstallDir%\nuget` (nuget.org is
-  disabled unless `-KeepNuGetOrg`; the whole NuGet block can be skipped with
-  `-SkipNuGetFeed`). Mirror any change in `uninstall.ps1` (which removes the source
-  entry and restores any backup it took).
+  Desktop shortcuts. Mirror any change in `uninstall.ps1`.
 - **Versioning / changelog**: bumps go in `CHANGELOG.md` (Keep a Changelog style) and are
   released by pushing a `vX.Y.Z` tag. The workflow auto-generates the diff-vs-previous-tag
   block in the release body — don't try to write that part by hand.

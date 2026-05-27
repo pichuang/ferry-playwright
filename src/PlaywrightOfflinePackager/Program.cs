@@ -96,51 +96,6 @@ try
         Console.WriteLine($"   Found driver: {nodeExe[0]}");
     });
 
-    // STEP 3b: stage core NuGet packages so the offline machine can also `dotnet restore` this project
-    string nugetStaging = Path.Combine(stagingRoot, "nuget");
-    Step("Stage NuGet packages", () =>
-    {
-        var nugetTmp = Path.Combine(stagingRoot, ".nuget-tmp");
-        Directory.CreateDirectory(nugetTmp);
-        Directory.CreateDirectory(nugetStaging);
-
-        // Restore the sample project's package graph into an isolated folder so we can
-        // collect the .nupkg files for the offline machine. Use --runtime so any
-        // RID-specific runtime packages also land here.
-        RunDotnet(repoRoot,
-            "restore", sampleProject,
-            "--packages", nugetTmp,
-            "--runtime", rid);
-
-        var nupkgs = Directory.GetFiles(nugetTmp, "*.nupkg", SearchOption.AllDirectories);
-        if (nupkgs.Length == 0)
-            throw new InvalidOperationException(
-                $"No .nupkg files were produced under '{nugetTmp}'. " +
-                "Restore did not populate any packages — cannot build offline feed.");
-
-        var indexLines = new List<string>
-        {
-            "Offline NuGet feed contents",
-            "============================",
-            "",
-        };
-        foreach (var src in nupkgs.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
-        {
-            var fileName = Path.GetFileName(src);
-            var dst = Path.Combine(nugetStaging, fileName);
-            File.Copy(src, dst, overwrite: true);
-            indexLines.Add(fileName);
-        }
-        File.WriteAllLines(Path.Combine(nugetStaging, "INDEX.txt"), indexLines);
-        Console.WriteLine($"   Collected {nupkgs.Length} nupkg(s) into '{nugetStaging}'.");
-
-        try { Directory.Delete(nugetTmp, recursive: true); }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"   (Warning) Could not delete temp folder '{nugetTmp}': {ex.Message}");
-        }
-    });
-
     // STEP 4: copy assets (install.ps1, uninstall.ps1, README.txt) into staging root
     Step("Stage assets", () => CopyDirectory(assetsDir, stagingRoot, overwrite: true));
 

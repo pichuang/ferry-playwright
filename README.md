@@ -62,7 +62,6 @@
 - 把應用程式複製到 `C:\Program Files\PlaywrightApp\`。
 - 設定 Playwright 不要嘗試下載瀏覽器（機器層級環境變數）。
 - 建立開始功能表與桌面捷徑。
-- 註冊離線 NuGet 來源（讓需要時可以直接在這台機器 build 同一專案）。
 
 ### 安裝完怎麼執行
 
@@ -77,7 +76,7 @@
 ### 解除安裝
 
 在同一個解壓資料夾，**雙擊** `uninstall.cmd`（或右鍵 `uninstall.ps1` → 以 PowerShell 執行）。
-腳本會移除程式檔案、清掉環境變數、刪除捷徑、撤銷離線 NuGet 來源。
+腳本會移除程式檔案、清掉環境變數、刪除捷徑。
 
 ---
 
@@ -114,12 +113,6 @@ A：本專案的 GitHub Actions 在每次 release 前會把 Windows runner 的�
 
 **Q：我已經有 Playwright 自動化專案，可以換掉裡面的範例嗎？**
 A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己的應用)。
-
-**Q：ZIP 為什麼這麼大（~320MB）？**
-A：~195MB 是 `microsoft.playwright.1.60.0.nupkg`（給離線 NuGet 來源用），
-其餘是 .NET runtime + 應用本身 + Playwright Node 驅動。
-若你完全不需要在目標機上重新 build，可以在安裝時加 `-SkipNuGetFeed`，
-ZIP 本身仍能執行；想完全不打包 nupkg 可改 packager（見 DEVELOPER.md）。
 
 ---
 

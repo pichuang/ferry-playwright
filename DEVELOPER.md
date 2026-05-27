@@ -13,7 +13,6 @@
 | Playwright Node 驅動 (`node.exe`) | NuGet 內附，publish 時自動複製到 `.playwright/node/win32_x64/` |
 | 瀏覽器 | 使用系統 Edge (`Channel = "msedge"`)，**完全不下載** Chromium / Firefox |
 | 環境變數 | `install.ps1` 設機器層級 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0` |
-| NuGet 來源 | 將本專案 restore graph 的 `.nupkg` 一併打進 ZIP，安裝時註冊為機器層級 NuGet 來源 |
 
 只要這幾件事都成立，目標機上就完全沒有任何「需要連網才能完成」的步驟。
 
@@ -94,11 +93,9 @@ dotnet run --project src/PlaywrightOfflinePackager -- \
 2. **Publish** — `dotnet publish -c Release -r win-x64 --self-contained true` 到暫存 `app/`。
 3. **Verify Playwright driver present** — 強制檢查 `app/.playwright/node/win32_x64/node.exe`
    存在，否則整個打包失敗。**這是整個離線契約最重要的單一檢查點**。
-4. **Stage NuGet packages** — `dotnet restore --packages <tmp> --runtime win-x64`，
-   把產生的所有 `.nupkg` 扁平複製到 `nuget/`，再寫一份 `nuget/INDEX.txt` 條列每個 nupkg。
-5. **Stage assets** — 把 `assets/` 內容（兩支 .ps1 + README.txt）複製到 ZIP 根目錄。
-6. **Write build metadata** — 寫 `BUILD-INFO.txt`（RID、設定、時間）。
-7. **Create ZIP** — 把整個 staging 目錄壓成 `output/PlaywrightOffline-win-x64-<timestamp>.zip`。
+4. **Stage assets** — 把 `assets/` 內容（兩支 .cmd + 兩支 .ps1 + README.txt）複製到 ZIP 根目錄。
+5. **Write build metadata** — 寫 `BUILD-INFO.txt`（RID、設定、時間）。
+6. **Create ZIP** — 把整個 staging 目錄壓成 `output/PlaywrightOffline-win-x64-<timestamp>.zip`。
 
 最終 ZIP 結構：
 
@@ -108,14 +105,6 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 │   ├── PlaywrightSampleApp.exe
 │   ├── *.dll                         # .NET runtime + Microsoft.Playwright
 │   └── .playwright/node/win32_x64/node.exe
-├── nuget/
-│   ├── microsoft.playwright.1.60.0.nupkg
-│   ├── microsoft.bcl.asyncinterfaces.6.0.0.nupkg
-│   ├── system.componentmodel.annotations.5.0.0.nupkg
-│   ├── microsoft.netcore.app.runtime.win-x64.10.0.7.nupkg
-│   ├── microsoft.aspnetcore.app.runtime.win-x64.10.0.7.nupkg
-│   ├── microsoft.netcore.app.host.win-x64.10.0.7.nupkg
-│   └── INDEX.txt
 ├── install.cmd
 ├── install.ps1
 ├── uninstall.cmd
@@ -123,49 +112,6 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 ├── README.txt
 └── BUILD-INFO.txt
 ```
-
----
-
-## 離線 NuGet feed
-
-### 為什麼要打包 nupkg？
-
-執行階段 self-contained publish 已經包好所有 DLL，**不需要** NuGet。
-但若離線機器需要 **重新 build / restore 同一專案**（或衍生新專案 reference 同樣套件），
-就得有本機可用的 nupkg 來源。
-
-### 安裝端做了什麼
-
-`install.ps1` 預設行為：
-
-- 把 `nuget/` 整個複製到 `%InstallDir%\nuget`。
-- 在 `%ProgramData%\NuGet\NuGet.Config` 寫入：
-
-  ```xml
-  <configuration>
-    <packageSources>
-      <add key="PlaywrightOfflineFeed" value="C:\Program Files\PlaywrightApp\nuget" />
-    </packageSources>
-    <disabledPackageSources>
-      <add key="nuget.org" value="true" />
-    </disabledPackageSources>
-  </configuration>
-  ```
-
-- 若原本就有 `NuGet.Config`，會先備份成 `NuGet.Config.bak.YYYYMMDD-HHMMSS`。
-
-可選 switches：
-
-| 參數 | 效果 |
-| --- | --- |
-| `-SkipNuGetFeed` | 完全略過 NuGet 區塊（純執行用、不要 build） |
-| `-KeepNuGetOrg`  | 保留 nuget.org 為啟用狀態（若機器其實有限定網路通道） |
-
-`uninstall.ps1` 會：
-
-- 把 `PlaywrightOfflineFeed` 從 `NuGet.Config` 移除。
-- 若我們先前寫的設定是唯一內容 → 還原最近一份 `.bak` 或刪除空檔。
-- 刪除 `%InstallDir%\nuget`。
 
 ---
 
@@ -306,5 +252,3 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 - **未經程式碼簽章** 的 .exe，目標機 SmartScreen 首次執行會跳警告；企業要分發請另行簽章。
 - 目前僅支援 **系統 Edge**。若需內建 Chromium / Firefox，要修改 packager
   把 `PLAYWRIGHT_BROWSERS_PATH` 對應的瀏覽器二進位也納入 ZIP，並調整 install 腳本指向。
-- ZIP 大小（~320MB）大頭是 `microsoft.playwright.nupkg`（~195MB）。若確定不需要
-  目標機 build，可以未來在 packager 加 flag 略過 NuGet 蒐集那一步。
