@@ -68,10 +68,20 @@
 打開**新的** PowerShell / Command Prompt（要重新讀環境變數），執行：
 
 ```powershell
-& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" https://example.com
+& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe"
 ```
 
 或直接點桌面 / 開始功能表的「PlaywrightApp」捷徑。
+
+執行後 Edge 會彈出一個 **「Hello, Playwright!」** 內嵌頁面，
+終端會印出三項斷言並以 `RESULT: PASS` 結尾 — 看到 PASS 就代表離線環境完全可用。
+按 Enter 即可關閉瀏覽器。
+
+> 想自己指定網址？在後面加 URL：
+> `& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" https://example.com`
+
+> 純自我測試 (Headless、不等 Enter、直接 PASS/FAIL 退出)：
+> `& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" --ci`
 
 ### 解除安裝
 

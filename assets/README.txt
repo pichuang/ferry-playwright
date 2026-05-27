@@ -37,12 +37,21 @@ How to run
 
       & "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe"
 
-  Or pass a URL:
+  Expected: Microsoft Edge opens an embedded "Hello, Playwright!" page,
+  the console prints three [OK] assertions, and ends with:
+
+      RESULT: PASS
+
+  That confirms Playwright is fully functional on this offline machine.
+  Press Enter in the console to close the browser.
+
+  Pass a URL to navigate somewhere else instead (no assertions, just title):
 
       & "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" https://example.com
 
-  The application launches the system-installed Microsoft Edge via Playwright,
-  navigates to the URL, prints the page title, and waits for Enter to close.
+  For an unattended self-test (headless, exits with code 0=PASS / 1=FAIL):
+
+      & "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" --ci
 
 How to uninstall
 ----------------

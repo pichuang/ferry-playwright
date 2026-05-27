@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hello-World self-test embedded in `PlaywrightSampleApp`: navigates to a
+  built-in `data:` URL with a "Hello, Playwright!" page, asserts the page
+  title, DOM text content, and a JS-evaluated value, then prints a clear
+  `RESULT: PASS` / `RESULT: FAIL` line and exits with the matching code.
+  No network required; works on a fully air-gapped Windows machine.
 - Double-click launchers `install.cmd` / `uninstall.cmd` so end users no
   longer need to right-click the .ps1 files. The .cmd wrappers forward
   arguments to the underlying PowerShell scripts and `pause` so the user
