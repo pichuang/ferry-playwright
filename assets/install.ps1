@@ -14,7 +14,9 @@
 param(
     [string]$InstallDir = (Join-Path $Env:ProgramFiles 'PlaywrightApp'),
     [switch]$NoShortcuts,
-    [switch]$SkipEdgeCheck
+    [switch]$SkipEdgeCheck,
+    [switch]$SkipNuGetFeed,
+    [switch]$KeepNuGetOrg
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +43,8 @@ function Invoke-SelfElevate {
     if ($InstallDir)    { $argList += @('-InstallDir', "`"$InstallDir`"") }
     if ($NoShortcuts)   { $argList += '-NoShortcuts' }
     if ($SkipEdgeCheck) { $argList += '-SkipEdgeCheck' }
+    if ($SkipNuGetFeed) { $argList += '-SkipNuGetFeed' }
+    if ($KeepNuGetOrg)  { $argList += '-KeepNuGetOrg' }
     Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs
     exit
 }
@@ -151,6 +155,57 @@ if (-not $NoShortcuts) {
         $sc2.Description = 'Playwright Offline (Edge)'
         $sc2.Save()
         Write-Host " Desktop    : $desktopLnk"
+    }
+}
+
+# Offline NuGet feed (machine scope)
+if (-not $SkipNuGetFeed) {
+    Write-Section 'Registering offline NuGet feed (machine scope)'
+
+    $nugetSrcDir = Join-Path $scriptDir 'nuget'
+    if (-not (Test-Path $nugetSrcDir)) {
+        Write-Warning " 'nuget' folder not found in payload; skipping offline NuGet feed setup."
+    } else {
+        $nugetDstDir = Join-Path $InstallDir 'nuget'
+        Write-Host " Copying nupkg folder -> $nugetDstDir"
+        if (Test-Path $nugetDstDir) { Remove-Item $nugetDstDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $nugetDstDir -Force | Out-Null
+        Copy-Item -Path (Join-Path $nugetSrcDir '*') -Destination $nugetDstDir -Recurse -Force
+
+        $nugetConfigDir  = Join-Path $Env:ProgramData 'NuGet'
+        $nugetConfigPath = Join-Path $nugetConfigDir 'NuGet.Config'
+        New-Item -ItemType Directory -Path $nugetConfigDir -Force | Out-Null
+
+        if (Test-Path $nugetConfigPath) {
+            $backup = "$nugetConfigPath.bak.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+            Copy-Item $nugetConfigPath $backup -Force
+            Write-Host " Existing NuGet.Config backed up to: $backup"
+        }
+
+        $disableNugetOrgBlock = if ($KeepNuGetOrg) {
+            ''
+        } else {
+            @"
+  <disabledPackageSources>
+    <add key="nuget.org" value="true" />
+  </disabledPackageSources>
+"@
+        }
+
+        $configXml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="PlaywrightOfflineFeed" value="$nugetDstDir" />
+  </packageSources>
+$disableNugetOrgBlock</configuration>
+"@
+        Set-Content -Path $nugetConfigPath -Value $configXml -Encoding UTF8
+        Write-Host " NuGet.Config written: $nugetConfigPath"
+        Write-Host "   Source 'PlaywrightOfflineFeed' = $nugetDstDir"
+        if (-not $KeepNuGetOrg) {
+            Write-Host '   nuget.org disabled (pass -KeepNuGetOrg to keep it enabled)'
+        }
     }
 }
 
