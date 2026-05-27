@@ -255,41 +255,47 @@ jobs:
           }
           Write-Host '✓ Application ran successfully while offline.'
 
-      - name: Audit TCP connections after run (detect any external traffic)
+      - name: Audit TCP connections after run (detect any external traffic from our app)
         shell: pwsh
         run: |
+          $beforeRaw = Get-Content tcp-before.json -Raw
+          $before = $beforeRaw | ConvertFrom-Json
+          # Build a set of pre-existing connection tuples to filter out runner-agent connections
+          $beforeKeys = @{}
+          foreach ($c in $before) {
+            $key = "$($c.LocalAddress)|$($c.LocalPort)|$($c.RemoteAddress)|$($c.RemotePort)"
+            $beforeKeys[$key] = $true
+          }
+
           $after = Get-NetTCPConnection | Select-Object LocalAddress,LocalPort,RemoteAddress,RemotePort,State,OwningProcess
           $after | ConvertTo-Json -Depth 3 | Out-File -FilePath tcp-after.json -Encoding utf8
 
-          $external = $after | Where-Object {
+          # New external connections = Established + not loopback/link-local + not in baseline snapshot
+          $newExternal = $after | Where-Object {
             $_.State -eq 'Established' -and
             $_.RemoteAddress -and
             $_.RemoteAddress -notmatch '^127\.' -and
             $_.RemoteAddress -ne '::1' -and
-            $_.RemoteAddress -notmatch '^169\.254\.' -and    # link-local
-            $_.RemoteAddress -notmatch '^fe80::' -and        # IPv6 link-local
+            $_.RemoteAddress -notmatch '^169\.254\.' -and
+            $_.RemoteAddress -notmatch '^fe80::' -and
             $_.RemoteAddress -ne '0.0.0.0' -and
-            $_.RemoteAddress -ne '::'
+            $_.RemoteAddress -ne '::' -and
+            (-not $beforeKeys.ContainsKey("$($_.LocalAddress)|$($_.LocalPort)|$($_.RemoteAddress)|$($_.RemotePort)"))
           }
 
-          if ($external -and $external.Count -gt 0) {
-            Write-Host 'External connections detected:'
-            $external | Format-Table -AutoSize
-            throw "Offline contract VIOLATED: $($external.Count) external TCP connection(s) found."
+          Write-Host ("Baseline external connections (excluded): {0}" -f ($before.Count))
+          Write-Host ("Post-run external connections (total)  : {0}" -f ($after.Count))
+          Write-Host ("New external connections during run    : {0}" -f (@($newExternal).Count))
+
+          if ($newExternal -and @($newExternal).Count -gt 0) {
+            Write-Host 'New external connections opened during the offline test:'
+            $newExternal | Format-Table -AutoSize
+            $newExternal | ConvertTo-Json -Depth 3 | Out-File -FilePath tcp-violations.json -Encoding utf8
+            throw "Offline contract VIOLATED: $((@($newExternal)).Count) NEW external TCP connection(s) opened during the test."
           }
-          Write-Host '✓ No external TCP connections detected during/after the offline test.'
+          Write-Host '✓ No new external TCP connections were opened during the offline test.'
 
-      - name: Upload network audit artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: network-audit
-          path: |
-            tcp-before.json
-            tcp-after.json
-          if-no-files-found: ignore
-
-      - name: Cleanup — restore firewall
+      - name: Cleanup — restore firewall (must run before artifact upload)
         if: always()
         shell: pwsh
         run: |
@@ -301,6 +307,17 @@ jobs:
           } catch {
             Write-Warning "Cleanup error: $_"
           }
+
+      - name: Upload network audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-audit
+          path: |
+            tcp-before.json
+            tcp-after.json
+            tcp-violations.json
+          if-no-files-found: ignore
 
   release:
     name: Publish GitHub Release
