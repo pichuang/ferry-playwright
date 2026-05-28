@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-28
+
 ### Added
 - **Seamless upgrade**: running `點擊兩下-setup.cmd` from a newer ZIP now
   smoothly upgrades an existing install without requiring an uninstall first.
