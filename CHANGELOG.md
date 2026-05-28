@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- README: new section **「想在這台機器寫自己的 Playwright 測試？」** with
+  step-by-step guides for VS Code, Visual Studio, and PowerShell. Explains
+  the .NET SDK prerequisite, the machine-scope env vars our installer sets,
+  and the `Channel = "msedge"` pattern that keeps everything offline.
+
 ### Changed
 - Renamed double-click launchers to `點擊兩下-install.cmd` /
   `點擊兩下-uninstall.cmd` so end users see the "double-click" hint

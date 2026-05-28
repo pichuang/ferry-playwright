@@ -106,6 +106,156 @@ ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`，把它拷給目標�
 
 ---
 
+## 想在這台機器寫自己的 Playwright 測試？
+
+這份 ZIP 提供的是「跑得起來」的最小環境。如果你想在同一台機器上
+**自己寫新的 Playwright 測試案例**，下面說明怎麼用 VS Code / Visual Studio / PowerShell 上手。
+
+### 前置作業（一次性）
+
+1. **安裝 .NET 10 SDK**（這份 ZIP 只內含執行用 runtime，沒有 SDK）。
+   - 官方下載：<https://dotnet.microsoft.com/download>
+   - 若這台機器**完全沒有網路**，請從另一台有網路的機器下載 SDK 安裝檔，
+     再 sneakernet 過來；或在貴公司內部 NuGet/檔案伺服器準備離線安裝檔。
+2. **確認環境變數已套用**（我們的 `install.cmd` 已在機器層級設好）：
+   ```powershell
+   [Environment]::GetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD','Machine')  # → 1
+   [Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH','Machine')         # → 0
+   ```
+   有了這兩個，新專案執行時就**不會**嘗試下載 Chromium，會走系統 Edge。
+
+> **離線提醒**：第一次 `dotnet restore`（拉 `Microsoft.Playwright` NuGet）通常需要
+> 連 nuget.org。如果這台機器完全沒網路，請在開發機先 restore 一次、把
+> `~/.nuget/packages` 整個帶過來，或自建內網 NuGet 私服。本專案目前不再隨 ZIP
+> 附 NuGet 來源。
+
+### 核心模式：永遠用系統 Edge
+
+不管選哪種專案類型，**Launch 時一定要指定 `Channel = "msedge"`**，
+這是這個離線方案的關鍵：
+
+```csharp
+await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+{
+    Channel  = "msedge",   // ← 不下載 Chromium，直接用系統 Edge
+    Headless = true,
+});
+```
+
+### 在 VS Code
+
+1. 安裝擴充套件：
+   - **C# Dev Kit**（Microsoft 官方，含 IntelliSense + Test Explorer）
+   - 選用：**Playwright Test for VSCode**（如果你之後想加 trace viewer 整合）
+2. 建立 NUnit 測試專案：
+   ```powershell
+   mkdir MyPwTests; cd MyPwTests
+   dotnet new nunit
+   dotnet add package Microsoft.Playwright.NUnit
+   ```
+3. 把預設 `UnitTest1.cs` 內容換成：
+   ```csharp
+   using Microsoft.Playwright;
+   using Microsoft.Playwright.NUnit;
+   using NUnit.Framework;
+
+   [Parallelizable(ParallelScope.Self)]
+   public class HelloTests : PageTest
+   {
+       public override BrowserNewContextOptions ContextOptions() => new();
+
+       [SetUpFixture]
+       public class Setup
+       {
+           [OneTimeSetUp]
+           public void Configure()
+           {
+               // 強制 Channel = msedge：覆寫 PageTest 預設的 Chromium download
+               Environment.SetEnvironmentVariable("HEADED", "0");
+           }
+       }
+
+       [Test]
+       public async Task SystemEdge_LoadsEmbeddedPage()
+       {
+           // 直接呼叫 Playwright API，自訂 launch 參數
+           using var pw = await Playwright.CreateAsync();
+           await using var browser = await pw.Chromium.LaunchAsync(new()
+           {
+               Channel = "msedge",
+               Headless = true,
+           });
+           var page = await browser.NewPageAsync();
+           await page.GotoAsync("data:text/html,<h1 id='msg'>Hello, Edge!</h1>");
+           Assert.That(await page.Locator("#msg").TextContentAsync(),
+                       Is.EqualTo("Hello, Edge!"));
+       }
+   }
+   ```
+4. 開啟 `MyPwTests` 資料夾，VS Code 右側 **Test Explorer (Testing)** 面板會列出測試。
+   按 ▶ 即可執行；或在終端機跑 `dotnet test`。
+
+### 在 Visual Studio
+
+1. **File → New → Project** 選擇 **NUnit Test Project (.NET)**。
+2. 在 Solution Explorer 對專案右鍵 → **Manage NuGet Packages**，搜尋並安裝
+   `Microsoft.Playwright.NUnit`（會自動帶入 `Microsoft.Playwright`）。
+3. 同樣把預設測試類別內容換成上面 VS Code 段落裡的 `HelloTests` 範例。
+4. 開啟 **Test Explorer**（View → Test Explorer，或 `Ctrl+E, T`），按 **Run All** (`Ctrl+R, A`)。
+5. 如果遇到「找不到瀏覽器」之類錯誤：請確認你**沒有**在專案任何地方呼叫
+   `Microsoft.Playwright.Program.Main(new[] {"install"})`（那會嘗試下載 Chromium）。
+   本機環境變數會擋掉下載，但要避免在 code 裡硬寫 `install`。
+
+### 在 PowerShell（純命令列）
+
+若不需要 IDE，最快的方式是直接 console app：
+
+```powershell
+mkdir MyPwScript; cd MyPwScript
+dotnet new console
+dotnet add package Microsoft.Playwright
+
+# 用記事本或 vim 把 Program.cs 換成下面內容，然後：
+dotnet run
+```
+
+最小 `Program.cs`：
+
+```csharp
+using Microsoft.Playwright;
+
+using var pw = await Playwright.CreateAsync();
+await using var browser = await pw.Chromium.LaunchAsync(new()
+{
+    Channel  = "msedge",
+    Headless = true,
+});
+var page = await browser.NewPageAsync();
+await page.GotoAsync("data:text/html,<h1 id='msg'>Hello from PowerShell!</h1>");
+
+var text = await page.Locator("#msg").TextContentAsync();
+Console.WriteLine($"result: {text}");
+if (text != "Hello from PowerShell!") { Environment.Exit(1); }
+```
+
+執行時你應該會看到：
+
+```
+result: Hello from PowerShell!
+```
+
+> 想做成 self-contained `.exe`？參考本專案 packager 的做法：
+> `dotnet publish -c Release -r win-x64 --self-contained true`，然後把
+> `bin/Release/net*/win-x64/publish/.playwright/node/win32_x64/node.exe` 連同
+> 整個 publish 資料夾搬到目標機。
+
+> 想用 Playwright 官方的 NUnit / MSTest / xUnit fixture？可以，
+> 但 fixture 預設會去呼叫 `playwright install`（下載 Chromium）。
+> 解法：在 fixture 啟動前先 set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`（已由我們的
+> 安裝腳本機器層級設好），並覆寫 `BrowserNewContextOptions` 改用 `Channel = "msedge"`。
+
+---
+
 ## 常見問題
 
 **Q：安裝時跳出「Microsoft Edge was not detected」怎麼辦？**
@@ -123,6 +273,13 @@ A：本專案的 GitHub Actions 在每次 release 前會把 Windows runner 的�
 
 **Q：我已經有 Playwright 自動化專案，可以換掉裡面的範例嗎？**
 A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己的應用)。
+
+**Q：可以用這份安裝來「寫」新的測試嗎？**
+A：可以，但這份 ZIP 只內含 runtime。要寫新測試請先安裝 .NET 10 SDK
+（[官網下載](https://dotnet.microsoft.com/download)），其餘步驟見上面
+「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
+我們安裝時設好的環境變數會自動套用到所有新專案，所以只要 launch 時用
+`Channel = "msedge"` 就能離線跑。
 
 ---
 
