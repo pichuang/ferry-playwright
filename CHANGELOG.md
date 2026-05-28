@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-28
+
+### Fixed
+- `dotnet restore` (and `dotnet new nunit` / `dotnet new mstest` implicit restore)
+  no longer fails with `NU1101: 找不到套件 coverlet.collector` /
+  `nunit.analyzers` on air-gapped machines. The SDK's `nunit` / `mstest`
+  project templates implicitly add `PackageReference` entries for these
+  "nice-to-have" analyzers/coverage packages, which v0.5.2's offline feed
+  did not bundle.
+
+### Added
+- Dev pack now bundles three additional packages so the stock `dotnet new
+  nunit` / `dotnet new mstest` templates restore fully offline:
+  - `coverlet.collector` 6.0.2 (code-coverage collector — both templates)
+  - `NUnit.Analyzers` 4.4.0 (matches NUnit 4.x)
+  - `MSTest.Analyzers` 3.6.4 (matches bundled MSTest.* 3.6.4)
+- `new-playwright-project.ps1` now pins these extras via
+  `dotnet add package --version` for `nunit` and `mstest` templates, so
+  restore always resolves them against the bundled feed even if a newer
+  SDK ships a template that wants a different patch level.
+
 ## [0.5.2] - 2026-05-28
 
 ### Added

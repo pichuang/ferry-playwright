@@ -69,6 +69,9 @@ $Versions = @{
     'NUnit3TestAdapter'           = '4.6.0'
     'MSTest.TestFramework'        = '3.6.4'
     'MSTest.TestAdapter'          = '3.6.4'
+    'coverlet.collector'          = '6.0.2'
+    'NUnit.Analyzers'             = '4.4.0'
+    'MSTest.Analyzers'            = '3.6.4'
 }
 
 function Write-Section($t) {
@@ -124,8 +127,8 @@ try {
 
     # 6) Pin / install packages from the bundled feed at versions we know exist.
     $packagesToAdd = switch ($Template) {
-        'nunit'   { @('Microsoft.NET.Test.Sdk', 'NUnit', 'NUnit3TestAdapter', 'Microsoft.Playwright', 'Microsoft.Playwright.NUnit') }
-        'mstest'  { @('Microsoft.NET.Test.Sdk', 'MSTest.TestFramework', 'MSTest.TestAdapter', 'Microsoft.Playwright', 'Microsoft.Playwright.MSTest') }
+        'nunit'   { @('Microsoft.NET.Test.Sdk', 'NUnit', 'NUnit3TestAdapter', 'NUnit.Analyzers', 'coverlet.collector', 'Microsoft.Playwright', 'Microsoft.Playwright.NUnit') }
+        'mstest'  { @('Microsoft.NET.Test.Sdk', 'MSTest.TestFramework', 'MSTest.TestAdapter', 'MSTest.Analyzers', 'coverlet.collector', 'Microsoft.Playwright', 'Microsoft.Playwright.MSTest') }
         'console' { @('Microsoft.Playwright') }
     }
 

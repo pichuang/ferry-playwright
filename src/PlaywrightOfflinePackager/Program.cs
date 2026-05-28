@@ -141,6 +141,9 @@ try
                 <PackageReference Include="NUnit3TestAdapter"           Version="4.6.0" />
                 <PackageReference Include="MSTest.TestFramework"        Version="3.6.4" />
                 <PackageReference Include="MSTest.TestAdapter"          Version="3.6.4" />
+                <PackageReference Include="coverlet.collector"          Version="6.0.2" />
+                <PackageReference Include="NUnit.Analyzers"             Version="4.4.0" />
+                <PackageReference Include="MSTest.Analyzers"            Version="3.6.4" />
               </ItemGroup>
             </Project>
             """);

@@ -226,7 +226,9 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
     - `assets/new-playwright-project.ps1`：helper script。`dotnet new <tpl> --no-restore`
       之前先把 template copy 進新專案，然後用**鎖定版本**（與 packager
       bundle 一致：Playwright 1.60.0、NUnit 4.2.2、MSTest 3.6.4、Test.Sdk
-      17.11.1）跑 `dotnet add package`，最後一次 restore。
+      17.11.1，以及 `dotnet new nunit`/`mstest` 模板隱含相依的
+      `coverlet.collector` 6.0.2、`NUnit.Analyzers` 4.4.0、`MSTest.Analyzers`
+      3.6.4 — 全部 v0.5.3 起 bundle）跑 `dotnet add package`，最後一次 restore。
   - 機器層 disable 仍保留（屬於 defense-in-depth），`-KeepNuGetOrg` 可關掉。
   - 兩支檔案會被 packager 包進 ZIP 根目錄，並由 `install.ps1` 額外 copy 到
     `%ProgramFiles%\PlaywrightApp\`，這樣安裝後從任何路徑都能直接呼叫

@@ -15,8 +15,9 @@
   app\                          (A) 自包含的 .NET 應用程式 + Playwright 驅動
   nuget\                        (B) 一組離線 NuGet 套件（.nupkg）+ INDEX.txt
                                     含 Microsoft.Playwright(.NUnit/.MSTest)、
-                                    Microsoft.NET.Test.Sdk、NUnit、MSTest 與
-                                    所有相依套件
+                                    Microsoft.NET.Test.Sdk、NUnit、MSTest、
+                                    coverlet.collector、NUnit.Analyzers、
+                                    MSTest.Analyzers 與所有相依套件
 
   點擊兩下-完整安裝(推薦).cmd            **雙擊就會同時安裝 A + B**（推薦給一般使用者）
   setup.ps1                     PowerShell 總入口腳本（被上面那支 .cmd 呼叫）
