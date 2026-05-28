@@ -7,10 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-28
+
+### Changed
+- **Strict offline by default for the dev pack**: `setup-devpack.ps1` now
+  writes `<disabledPackageSources><add key="nuget.org" value="true"/></disabledPackageSources>`
+  into machine `NuGet.Config` so that `dotnet add package <id>` (without an
+  explicit version) no longer queries `api.nuget.org` to look up the latest
+  version. This fixes "無法識別這台主機 api.nuget.org" on fully air-gapped
+  machines.
+- **Clearer double-click launcher names** — renamed to reduce confusion between
+  "install" and "setup":
+  - `點擊兩下-setup.cmd` → **`點擊兩下-完整安裝(推薦).cmd`**
+  - `點擊兩下-install.cmd` → **`點擊兩下-僅安裝Runtime.cmd`**
+  - `點擊兩下-uninstall.cmd` → **`點擊兩下-解除安裝.cmd`**
+  The inner PowerShell scripts (`setup.ps1` / `install.ps1` / `uninstall.ps1`)
+  keep their names; only the user-visible launchers changed.
+
+### Added
+- `setup-devpack.ps1` and `setup.ps1` accept a new `-KeepNuGetOrg` switch for
+  machines with intermittent connectivity that want to keep nuget.org enabled
+  as a fallback. Passing it on a re-run also removes any prior disable entry,
+  so you can flip back to hybrid mode without manually editing NuGet.Config.
+
+### Deprecated
+- `-DisableNuGetOrg` on `setup-devpack.ps1` / `setup.ps1` is now redundant
+  (it has become the default). The flag continues to work for backward
+  compatibility and prints an info line; it will be removed in a future major.
+
 ## [0.5.0] - 2026-05-28
 
 ### Added
-- **Seamless upgrade**: running `點擊兩下-setup.cmd` from a newer ZIP now
+- **Seamless upgrade**: running `點擊兩下-完整安裝(推薦).cmd` from a newer ZIP now
   smoothly upgrades an existing install without requiring an uninstall first.
   - Each ZIP carries a top-level **`VERSION.txt`** (semver), and `install.ps1`
     compares it to the version of the existing install to print
@@ -38,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a **single** `PlaywrightOffline-*.zip` (~350 MB) containing both `app/`
   (runtime) and `nuget/` (offline NuGet feed). Removed the `--devpack` packager
   flag — the combined ZIP is always produced.
-- New top-level entry script **`setup.ps1`** / **`點擊兩下-setup.cmd`** runs
+- New top-level entry script **`setup.ps1`** / **`點擊兩下-完整安裝(推薦).cmd`** runs
   `install.ps1` (runtime) and `setup-devpack.ps1` (offline NuGet feed)
   back-to-back after a single UAC prompt.
 - Top-level **`uninstall.ps1`** is now a wrapper that runs
@@ -95,8 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the `Channel = "msedge"` pattern that keeps everything offline.
 
 ### Changed
-- Renamed double-click launchers to `點擊兩下-install.cmd` /
-  `點擊兩下-uninstall.cmd` so end users see the "double-click" hint
+- Renamed double-click launchers to `點擊兩下-僅安裝Runtime.cmd` /
+  `點擊兩下-解除安裝.cmd` so end users see the "double-click" hint
   directly in the filename. The underlying `install.ps1` / `uninstall.ps1`
   scripts keep their original names.
 - End-user `assets/README.txt` rewritten in Traditional Chinese

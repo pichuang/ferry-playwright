@@ -10,7 +10,7 @@
 
 | 項目 | 版本 |
 | --- | --- |
-| ferry-playwright | **v0.5.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| ferry-playwright | **v0.5.1**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
 | Microsoft.Playwright (.NET) | **1.60.0** |
 | .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
 | 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
@@ -56,7 +56,7 @@
 ### 一鍵安裝（推薦：runtime + dev pack）
 
 1. 把 `PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
-2. 進入解壓後的資料夾，**雙擊** `點擊兩下-setup.cmd`。
+2. 進入解壓後的資料夾，**雙擊** `點擊兩下-完整安裝(推薦).cmd`。
 3. 接受 UAC 提權對話框（只會問一次）。
 4. 等畫面跳出「All done. Runtime + dev pack are installed.」即完成。
 
@@ -69,11 +69,17 @@
   `PlaywrightOfflineFeed` 來源（舊檔備份為 `.bak.YYYYMMDD-HHMMSS`）。
 
 > 進階：傳參數時可改用 `setup.ps1`，例如
-> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -SkipEdgeCheck -DisableNuGetOrg`。
+> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -SkipEdgeCheck`。
+>
+> **嚴格離線（預設）**：`setup-devpack.ps1` 預設會把 `nuget.org` 加入
+> `disabledPackageSources`，這樣 `dotnet add package <id>`（沒指定版本時）
+> 不會嘗試上 `api.nuget.org` 查 latest version。若這台機器**偶爾**有網路通道、
+> 想保留 nuget.org 作為 fallback，可加 `-KeepNuGetOrg`：
+> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -KeepNuGetOrg`。
 
 ### 只想裝其中一邊
 
-- **只裝 runtime**：雙擊 `點擊兩下-install.cmd`（呼叫 `install.ps1`）。
+- **只裝 runtime**：雙擊 `點擊兩下-僅安裝Runtime.cmd`（呼叫 `install.ps1`）。
 - **只裝 dev pack**：系統管理員 PowerShell 執行
   `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1`。
 
@@ -112,7 +118,7 @@ dotnet add package Microsoft.Playwright.NUnit
 
 ### 升級到新版本
 
-直接執行新版 ZIP 內的 `點擊兩下-setup.cmd` 即可，**不需要**先解除安裝。腳本會自動：
+直接執行新版 ZIP 內的 `點擊兩下-完整安裝(推薦).cmd` 即可，**不需要**先解除安裝。腳本會自動：
 
 - 比對 `C:\Program Files\PlaywrightApp\VERSION.txt` 與新 ZIP 內的 `VERSION.txt`，
   在畫面印出 `Upgrading PlaywrightApp: vOLD -> vNEW`（同版號則顯示 Reinstalling，
@@ -125,7 +131,7 @@ dotnet add package Microsoft.Playwright.NUnit
 
 ### 解除安裝
 
-在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`。腳本會：
+在同一個解壓資料夾，**雙擊** `點擊兩下-解除安裝.cmd`。腳本會：
 
 - **[1/2] dev pack**：從機器層 NuGet.Config 移除來源、依 INDEX.txt 刪掉我們塞進去的
   .nupkg（不會誤刪其他 Microsoft 既有的 offline 套件）。
@@ -167,12 +173,14 @@ ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`（runtime + dev pack �
 
    - **（推薦）使用我們的 ZIP 一鍵裝完** — 同一個 release 的
      `PlaywrightOffline-win-x64-*.zip` 已內含離線 NuGet feed。解壓後雙擊
-     `點擊兩下-setup.cmd`，會把 `Microsoft.Playwright`、
+     `點擊兩下-完整安裝(推薦).cmd`，會把 `Microsoft.Playwright`、
      `Microsoft.Playwright.NUnit`、`Microsoft.NET.Test.Sdk`、NUnit、MSTest
      等 .nupkg **複製到 Microsoft 既有的全機器離線 feed 資料夾**
      (`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`)，並在
-     `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source。之後任何新專案
-     `dotnet add package Microsoft.Playwright` 都跟有 nuget.org 一樣會成功。
+     `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source，**並且預設停用
+     `nuget.org`**（嚴格離線；確保 `dotnet add package` 不會偷打 api.nuget.org
+     查 latest version）。之後任何新專案 `dotnet add package Microsoft.Playwright`
+     都會走離線 feed。若想保留 nuget.org 當 fallback，安裝時加 `-KeepNuGetOrg`。
      （只想裝 NuGet feed、不裝範例 runtime 也行：執行
      `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1` 即可。）
    - 或自行帶整個 `~/.nuget/packages` 過來，或自建內網 NuGet 私服。
@@ -330,7 +338,7 @@ A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己
 
 **Q：可以用這份安裝來「寫」新的測試嗎？**
 A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://dotnet.microsoft.com/download)）；
-   ZIP 內的 dev pack 部分（雙擊 `點擊兩下-setup.cmd` 一鍵裝完，或單獨執行
+   ZIP 內的 dev pack 部分（雙擊 `點擊兩下-完整安裝(推薦).cmd` 一鍵裝完，或單獨執行
    `setup-devpack.ps1`）會把 .nupkg 放進機器層離線 NuGet feed，
    解決 NuGet 套件下載問題。詳細步驟見上面
 「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
@@ -340,11 +348,11 @@ A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://do
 **Q：ZIP 裡的 `app/` 跟 `nuget/` 各是什麼？**
 A：`app/` 是 self-contained 的 runtime 範例程式（.NET + Playwright driver +
 系統 Edge）；`nuget/` 是離線 NuGet feed（26 個 .nupkg，含
-Microsoft.Playwright、NUnit、MSTest 等）。雙擊 `點擊兩下-setup.cmd` 會把
+Microsoft.Playwright、NUnit、MSTest 等）。雙擊 `點擊兩下-完整安裝(推薦).cmd` 會把
 `app/` 內容裝到 `C:\Program Files\PlaywrightApp\`、把 `nuget/` 內容散到
 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages` 並註冊機器層 NuGet source。
 之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。
-只想裝其中一邊？runtime 雙擊 `點擊兩下-install.cmd`，dev pack 執行
+只想裝其中一邊？runtime 雙擊 `點擊兩下-僅安裝Runtime.cmd`，dev pack 執行
 `setup-devpack.ps1`。
 
 ---

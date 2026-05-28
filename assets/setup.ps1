@@ -8,13 +8,14 @@
 
     - Self-elevates once; both inner scripts inherit the elevated session.
     - Runtime install runs first; if it fails the dev pack step is skipped.
-    - Forwards -SkipEdgeCheck to install.ps1 and -DisableNuGetOrg to
-      setup-devpack.ps1.
+    - Forwards -SkipEdgeCheck to install.ps1, and -KeepNuGetOrg /
+      -DisableNuGetOrg (deprecated alias) to setup-devpack.ps1.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$SkipEdgeCheck,
+    [switch]$KeepNuGetOrg,
     [switch]$DisableNuGetOrg,
     [string]$InstallDir = (Join-Path $Env:ProgramFiles 'PlaywrightApp')
 )
@@ -34,6 +35,7 @@ function Invoke-SelfElevate {
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"",
                  '-InstallDir', "`"$InstallDir`"")
     if ($SkipEdgeCheck)   { $argList += '-SkipEdgeCheck' }
+    if ($KeepNuGetOrg)    { $argList += '-KeepNuGetOrg' }
     if ($DisableNuGetOrg) { $argList += '-DisableNuGetOrg' }
     Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs
     exit
@@ -67,6 +69,7 @@ if (-not (Test-Path $setupDevpackPs1)) {
 Write-Host ''
 Write-Host '[2/2] Installing offline NuGet dev pack...' -ForegroundColor Cyan
 $devpackArgs = @{}
+if ($KeepNuGetOrg)    { $devpackArgs['KeepNuGetOrg']    = $true }
 if ($DisableNuGetOrg) { $devpackArgs['DisableNuGetOrg'] = $true }
 & $setupDevpackPs1 @devpackArgs
 

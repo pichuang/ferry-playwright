@@ -225,7 +225,7 @@ try
     Console.WriteLine($" ZIP : {zipPath}");
     Console.WriteLine();
     Console.WriteLine(" Transfer this ZIP to the offline Windows machine,");
-    Console.WriteLine(" extract it, then double-click '點擊兩下-setup.cmd'");
+    Console.WriteLine(" extract it, then double-click '點擊兩下-完整安裝(推薦).cmd'");
     Console.WriteLine(" to install runtime + dev pack in one shot.");
     return 0;
 }

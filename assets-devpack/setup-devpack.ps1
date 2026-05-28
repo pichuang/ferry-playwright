@@ -10,9 +10,12 @@
     Microsoft.Playwright` and friends without internet access.
 
     - Self-elevates if not already running as Administrator.
-    - Does NOT disable nuget.org by default (machines with intermittent
-      connectivity can still pull other packages when online).
-      Pass -DisableNuGetOrg for strict offline.
+    - **Disables nuget.org by default** so that `dotnet add package` resolves
+      everything from the bundled offline feed (this is what most users on an
+      air-gapped machine want — see `-KeepNuGetOrg` to override).
+    - Pass `-KeepNuGetOrg` if your machine has occasional connectivity and you
+      want nuget.org left enabled as a fallback.
+    - (`-DisableNuGetOrg` is now a deprecated no-op kept for backward compat.)
     - Sets the same Playwright environment variables as the runtime installer
       (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1, PLAYWRIGHT_BROWSERS_PATH=0) so the
       dev pack can be used standalone, without the runtime ZIP.
@@ -24,7 +27,8 @@
 param(
     [string]$FeedDir = (Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs\NuGetPackages'),
     [string]$SourceName = 'PlaywrightOfflineFeed',
-    [switch]$DisableNuGetOrg
+    [switch]$KeepNuGetOrg,
+    [switch]$DisableNuGetOrg  # deprecated alias; offline-only is now the default
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +54,7 @@ function Invoke-SelfElevate {
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"")
     if ($FeedDir)          { $argList += @('-FeedDir',    "`"$FeedDir`"") }
     if ($SourceName)       { $argList += @('-SourceName', "`"$SourceName`"") }
+    if ($KeepNuGetOrg)     { $argList += '-KeepNuGetOrg' }
     if ($DisableNuGetOrg)  { $argList += '-DisableNuGetOrg' }
     Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs
     exit
@@ -156,21 +161,36 @@ $addEl.SetAttribute('key', $SourceName)
 $addEl.SetAttribute('value', $FeedDir)
 $packageSources.AppendChild($addEl) | Out-Null
 
-if ($DisableNuGetOrg) {
-    $disabled = $cfg.configuration.SelectSingleNode('disabledPackageSources')
+if ($DisableNuGetOrg -and -not $KeepNuGetOrg) {
+    Write-Host ' (info)     : -DisableNuGetOrg is now the default; flag is deprecated.' -ForegroundColor DarkGray
+}
+
+# Default since v0.5.1: offline-only. nuget.org gets added to disabledPackageSources
+# so that `dotnet add package <id>` does NOT query api.nuget.org for "latest version".
+# Pass -KeepNuGetOrg to keep nuget.org enabled (useful when the machine has
+# intermittent connectivity and you want fallback access).
+$disableNugetOrg = -not $KeepNuGetOrg
+
+$disabled = $cfg.configuration.SelectSingleNode('disabledPackageSources')
+$existingDisabled = if ($disabled) { @($disabled.SelectNodes("add[@key='nuget.org']")) } else { @() }
+
+if ($disableNugetOrg) {
     if (-not $disabled) {
         $disabled = $cfg.CreateElement('disabledPackageSources')
         $cfg.configuration.AppendChild($disabled) | Out-Null
     }
-    $disExisting = @($disabled.SelectNodes("add[@key='nuget.org']"))
-    foreach ($n in $disExisting) { $disabled.RemoveChild($n) | Out-Null }
+    foreach ($n in $existingDisabled) { $disabled.RemoveChild($n) | Out-Null }
     $dis = $cfg.CreateElement('add')
     $dis.SetAttribute('key', 'nuget.org')
     $dis.SetAttribute('value', 'true')
     $disabled.AppendChild($dis) | Out-Null
-    Write-Host ' nuget.org  : DISABLED (strict offline mode)' -ForegroundColor Yellow
+    Write-Host ' nuget.org  : DISABLED (offline-only, default)' -ForegroundColor Yellow
 } else {
-    Write-Host ' nuget.org  : left untouched (use -DisableNuGetOrg for strict offline)'
+    # User explicitly wants nuget.org kept; remove any prior disable entry we wrote.
+    if ($disabled) {
+        foreach ($n in $existingDisabled) { $disabled.RemoveChild($n) | Out-Null }
+    }
+    Write-Host ' nuget.org  : kept enabled (-KeepNuGetOrg passed)' -ForegroundColor Green
 }
 
 $cfg.Save($nugetConfig)

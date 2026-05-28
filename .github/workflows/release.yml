@@ -137,7 +137,7 @@ jobs:
             echo "Single combined ZIP containing:"
             echo "- **Runtime** (\`app/\`) — self-contained .NET app + Playwright driver"
             echo "- **Dev pack** (\`nuget/\`) — offline NuGet feed with Microsoft.Playwright + NUnit + MSTest packages"
-            echo "- Double-click \`點擊兩下-setup.cmd\` to install both in one shot. Individual installers"
+            echo "- Double-click \`點擊兩下-完整安裝(推薦).cmd\` to install both in one shot. Individual installers"
             echo "  (\`install.ps1\` for runtime only, \`setup-devpack.ps1\` for dev pack only) are still available."
             echo ""
             echo "## Self-test results"

@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM Double-clickable launcher for uninstall.ps1.
 REM Invokes PowerShell with bypassed execution policy and forwards any arguments.
 setlocal

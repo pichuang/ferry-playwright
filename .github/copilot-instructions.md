@@ -94,11 +94,11 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   verification is the single most important guard — keep it. ZIP must include
   `app/.playwright/node/win32_x64/node.exe` and `nuget/microsoft.playwright.1.60.0.nupkg`.
 - **Entry scripts inside the ZIP** (all at ZIP root):
-  - `點擊兩下-setup.cmd` → `setup.ps1` → chains `install.ps1` (runtime) then
+  - `點擊兩下-完整安裝(推薦).cmd` → `setup.ps1` → chains `install.ps1` (runtime) then
     `setup-devpack.ps1` (offline NuGet feed). One UAC prompt covers both.
-  - `點擊兩下-uninstall.cmd` → `uninstall.ps1` → chains `uninstall-devpack.ps1` then
+  - `點擊兩下-解除安裝.cmd` → `uninstall.ps1` → chains `uninstall-devpack.ps1` then
     `uninstall-runtime.ps1`. Dev pack failures are non-fatal so runtime cleanup still runs.
-  - `點擊兩下-install.cmd` / `install.ps1` — runtime-only install (advanced users).
+  - `點擊兩下-僅安裝Runtime.cmd` / `install.ps1` — runtime-only install (advanced users).
   - `setup-devpack.ps1` / `uninstall-devpack.ps1` — dev-pack-only flow (advanced users).
 - **install.ps1** self-elevates, requires Edge unless `-SkipEdgeCheck` is passed, installs
   to `%ProgramFiles%\PlaywrightApp`, sets *machine-scope* env vars, creates Start Menu +

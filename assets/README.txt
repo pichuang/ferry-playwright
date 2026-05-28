@@ -18,14 +18,14 @@
                                     Microsoft.NET.Test.Sdk、NUnit、MSTest 與
                                     所有相依套件
 
-  點擊兩下-setup.cmd            **雙擊就會同時安裝 A + B**（推薦給一般使用者）
+  點擊兩下-完整安裝(推薦).cmd            **雙擊就會同時安裝 A + B**（推薦給一般使用者）
   setup.ps1                     PowerShell 總入口腳本（被上面那支 .cmd 呼叫）
 
-  點擊兩下-install.cmd          雙擊只裝 A（runtime）
+  點擊兩下-僅安裝Runtime.cmd          雙擊只裝 A（runtime）
   install.ps1                   只裝 A 的 PowerShell 腳本
   setup-devpack.ps1             只裝 B 的 PowerShell 腳本（dev pack）
 
-  點擊兩下-uninstall.cmd        **雙擊就會同時解除 A + B**
+  點擊兩下-解除安裝.cmd        **雙擊就會同時解除 A + B**
   uninstall.ps1                 PowerShell 總入口解除腳本
   uninstall-runtime.ps1         只解除 A 的腳本
   uninstall-devpack.ps1         只解除 B 的腳本
@@ -45,7 +45,7 @@
 
 如何安裝（一鍵）
 ----------------
-  1. 在解壓出來的資料夾中，**雙擊「點擊兩下-setup.cmd」**。
+  1. 在解壓出來的資料夾中，**雙擊「點擊兩下-完整安裝(推薦).cmd」**。
   2. UAC 提權視窗出現時按「是」。
   3. 腳本會依序：
         [1/2] 安裝 runtime：
@@ -62,7 +62,7 @@
 
 如何安裝（只裝其中一邊）
 ------------------------
-  * 只裝 runtime：雙擊「點擊兩下-install.cmd」
+  * 只裝 runtime：雙擊「點擊兩下-僅安裝Runtime.cmd」
   * 只裝 dev pack：以系統管理員身分開 PowerShell，執行：
         powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-devpack.ps1
 
@@ -113,7 +113,7 @@
 
 如何解除安裝
 ------------
-  在原解壓資料夾，**雙擊「點擊兩下-uninstall.cmd」**，會：
+  在原解壓資料夾，**雙擊「點擊兩下-解除安裝.cmd」**，會：
 
   [1/2] 移除 dev pack：
         - 從機器層 NuGet.Config 移除 PlaywrightOfflineFeed 來源
@@ -144,10 +144,11 @@
           或請貴公司用自有的程式碼簽章憑證簽過再分發。
 
   * `dotnet add package Microsoft.Playwright` 還是說連不到 nuget.org
-        - 重新開新的 cmd / PowerShell 視窗讓環境變數重整；或執行
-              dotnet restore --no-cache --source "PlaywrightOfflineFeed"
-          強制只用離線來源。可在 setup.ps1 加 -DisableNuGetOrg 強制關閉
-          nuget.org 來源。
+        - v0.5.1 起 setup-devpack.ps1 預設已停用 nuget.org，不應再看到此錯誤。
+          如果仍看到：請重開一個新的 PowerShell 視窗讓環境變數重新讀入。
+        - 若你**刻意**想保留 nuget.org（這台機器偶爾有網路），重跑：
+              powershell -ExecutionPolicy Bypass -File .\setup.ps1 -KeepNuGetOrg
+          之後就會回到離線 feed + nuget.org 混合模式。
 
   * 想在 Visual Studio 看到這些套件
         - VS 預設就把 %ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages 視為
@@ -157,7 +158,7 @@
 
 重新安裝 / 升級
 ---------------
-  直接再執行一次「點擊兩下-setup.cmd」即可，**不需要**先解除安裝。
+  直接再執行一次「點擊兩下-完整安裝(推薦).cmd」即可，**不需要**先解除安裝。
 
   - 安裝畫面會顯示「Upgrading PlaywrightApp: vOLD -> vNEW」之類訊息，
     來源是 C:\Program Files\PlaywrightApp\VERSION.txt 與 ZIP 內 VERSION.txt 的比對。

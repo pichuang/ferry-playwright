@@ -26,11 +26,11 @@ ferry-playwright/
 │   ├── PlaywrightSampleApp/         # 被打包的範例應用（Channel="msedge"，支援 --ci）
 │   └── PlaywrightOfflinePackager/   # 打包工具
 ├── assets/                          # runtime + 入口腳本（會包進 ZIP 根目錄）
-│   ├── 點擊兩下-setup.cmd            # 一鍵入口（runtime + dev pack）
+│   ├── 點擊兩下-完整安裝(推薦).cmd            # 一鍵入口（runtime + dev pack）
 │   ├── setup.ps1                    # 呼叫 install.ps1 + setup-devpack.ps1
-│   ├── 點擊兩下-install.cmd          # 進階：只裝 runtime
+│   ├── 點擊兩下-僅安裝Runtime.cmd          # 進階：只裝 runtime
 │   ├── install.ps1                  # runtime 一鍵安裝腳本
-│   ├── 點擊兩下-uninstall.cmd        # 雙擊解除（dev pack + runtime）
+│   ├── 點擊兩下-解除安裝.cmd        # 雙擊解除（dev pack + runtime）
 │   ├── uninstall.ps1                # wrapper: uninstall-devpack → uninstall-runtime
 │   ├── uninstall-runtime.ps1        # 只解除 runtime 的腳本
 │   └── README.txt                   # 給最終使用者的合併版說明（繁體中文）
@@ -130,12 +130,12 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime + dev pack, ~350 MB)
 │   ├── mstest.*.nupkg + mstest.testadapter.*.nupkg
 │   ├── ... (26 unique nupkgs total)
 │   └── INDEX.txt
-├── 點擊兩下-setup.cmd                # 一鍵入口：runtime + dev pack
+├── 點擊兩下-完整安裝(推薦).cmd                # 一鍵入口：runtime + dev pack
 ├── setup.ps1                         # 呼叫 install.ps1 + setup-devpack.ps1
-├── 點擊兩下-install.cmd              # 進階：只裝 runtime
+├── 點擊兩下-僅安裝Runtime.cmd              # 進階：只裝 runtime
 ├── install.ps1
 ├── setup-devpack.ps1                 # 進階：只裝 dev pack
-├── 點擊兩下-uninstall.cmd
+├── 點擊兩下-解除安裝.cmd
 ├── uninstall.ps1                     # wrapper: uninstall-devpack → uninstall-runtime
 ├── uninstall-runtime.ps1
 ├── uninstall-devpack.ps1
@@ -154,14 +154,14 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime + dev pack, ~350 MB)
   失敗只發 warning）→ 呼叫 `uninstall-runtime.ps1`。順序選 dev pack 先是因為 NuGet feed
   設定不影響 runtime 砍檔，反過來 runtime 砍掉後 dev pack 還是要清；而且 dev pack 的
   uninstall 不會去動 `PLAYWRIGHT_*` 環境變數，是 `uninstall-runtime.ps1` 才會清。
-- **點擊兩下-setup.cmd** 與其他 cmd 一樣模式：`chcp 65001` → `powershell -NoProfile
+- **點擊兩下-完整安裝(推薦).cmd** 與其他 cmd 一樣模式：`chcp 65001` → `powershell -NoProfile
   -ExecutionPolicy Bypass -File %~dp0setup.ps1 %*` → `pause`。
 
 ---
 
 ## install.ps1 / uninstall-runtime.ps1 設計
 
-- **雙擊體驗**：另附 `點擊兩下-install.cmd` / `點擊兩下-uninstall.cmd` 包裝，本質就是
+- **雙擊體驗**：另附 `點擊兩下-僅安裝Runtime.cmd` / `點擊兩下-解除安裝.cmd` 包裝，本質就是
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*` + `pause`。
   使用者雙擊即可，UAC 提權沿用下面 .ps1 的 `Invoke-SelfElevate`。
   （ZIP 用 `Encoding.UTF8` 打包，General-purpose bit 11 會自動設，Windows 內建
@@ -193,7 +193,7 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime + dev pack, ~350 MB)
 
 dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄）。`assets-devpack/`
 只剩兩支 ps1 腳本，沒有自己的入口 cmd 或 README——共用最外層的 `setup.ps1` /
-`點擊兩下-setup.cmd` / `README.txt`。
+`點擊兩下-完整安裝(推薦).cmd` / `README.txt`。
 
 - **shell.csproj（packager 內動態產生）**：故意拉一個完整的 NUnit + MSTest + Test SDK
   圖，包含 `Microsoft.Playwright(.NUnit/.MSTest)` 1.60.0。版本寫死，避免每次打包
@@ -211,8 +211,13 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
   場景沒有 VS 的 NuGet config，所以需要在機器層 NuGet.Config 顯式加 source。
   setup 用 `[xml]` 物件 idempotent 操作（重覆執行不會堆出重複條目），改前先
   `Copy-Item` 備份為 `.bak.YYYYMMDD-HHMMSS`。
-- **預設不停用 nuget.org**：使用者若偶爾有網路通道，nuget.org 仍可走 fallback；
-  想強制離線可帶 `-DisableNuGetOrg`（透過 `setup.ps1` forward 也可）。
+- **預設停用 nuget.org（v0.5.1 起）**：`dotnet add package <id>` 沒指定版本時，
+  NuGet client 會去所有 enabled sources 查 latest version，即便 PlaywrightOfflineFeed
+  已是其中之一也一樣會打 `api.nuget.org`，在離線機 → DNS 失敗。所以 setup-devpack
+  預設把 nuget.org 加進 `disabledPackageSources`，把 dev pack 行為對齊 runtime 的
+  「嚴格離線」契約。如果機器是「偶爾離線」情境，帶 `-KeepNuGetOrg` 跑就保留
+  nuget.org（重跑時也會移除舊的 disable 條目，能切回混合模式）。
+  `-DisableNuGetOrg` 旗標保留但已成預設、未來移除。
 - **冪等設環境變數**：與 `install.ps1` 同樣寫
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0`（Machine
   scope），讓 dev pack 可單獨使用（直接執行 `setup-devpack.ps1`），不必先裝 runtime。
