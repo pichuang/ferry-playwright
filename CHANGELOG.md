@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING (packaging)**: collapsed the two release artifacts
+  (`PlaywrightOffline-*.zip` runtime + `PlaywrightDevPack-*.zip` dev pack) into
+  a **single** `PlaywrightOffline-*.zip` (~350 MB) containing both `app/`
+  (runtime) and `nuget/` (offline NuGet feed). Removed the `--devpack` packager
+  flag — the combined ZIP is always produced.
+- New top-level entry script **`setup.ps1`** / **`點擊兩下-setup.cmd`** runs
+  `install.ps1` (runtime) and `setup-devpack.ps1` (offline NuGet feed)
+  back-to-back after a single UAC prompt.
+- Top-level **`uninstall.ps1`** is now a wrapper that runs
+  `uninstall-devpack.ps1` then `uninstall-runtime.ps1`. The previous runtime
+  uninstall script was renamed `uninstall.ps1` → `uninstall-runtime.ps1`.
+- README inside the ZIP is now a single combined document covering both
+  runtime and dev pack flows.
+- Release workflow simplified: only one ZIP is produced, verified, and
+  attached to the GitHub Release. Verify-offline still only exercises the
+  runtime portion (dev pack would make invasive machine-level changes).
+
+### Removed
+- Standalone `PlaywrightDevPack-*.zip` artifact (contents merged into the
+  combined ZIP).
+- `assets-devpack/點擊兩下-setup-devpack.cmd` and
+  `assets-devpack/點擊兩下-uninstall-devpack.cmd` (advanced users can call the
+  individual `.ps1` files directly).
+
 ## [0.4.0] - 2026-05-28
 
 ### Added

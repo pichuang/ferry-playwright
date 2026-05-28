@@ -25,18 +25,18 @@ ferry-playwright/
 ├── src/
 │   ├── PlaywrightSampleApp/         # 被打包的範例應用（Channel="msedge"，支援 --ci）
 │   └── PlaywrightOfflinePackager/   # 打包工具
-├── assets/
-│   ├── 點擊兩下-install.cmd          # 雙擊執行的包裝（呼叫 install.ps1）
-│   ├── install.ps1                  # 目標機一鍵安裝腳本
-│   ├── 點擊兩下-uninstall.cmd        # 雙擊執行的包裝（呼叫 uninstall.ps1）
-│   ├── uninstall.ps1                # 解除安裝腳本
-│   └── README.txt                   # 給最終使用者（繁體中文，會包進 runtime ZIP）
-├── assets-devpack/                  # dev pack ZIP 用的 staging 來源（--devpack 才用）
-│   ├── 點擊兩下-setup-devpack.cmd
+├── assets/                          # runtime + 入口腳本（會包進 ZIP 根目錄）
+│   ├── 點擊兩下-setup.cmd            # 一鍵入口（runtime + dev pack）
+│   ├── setup.ps1                    # 呼叫 install.ps1 + setup-devpack.ps1
+│   ├── 點擊兩下-install.cmd          # 進階：只裝 runtime
+│   ├── install.ps1                  # runtime 一鍵安裝腳本
+│   ├── 點擊兩下-uninstall.cmd        # 雙擊解除（dev pack + runtime）
+│   ├── uninstall.ps1                # wrapper: uninstall-devpack → uninstall-runtime
+│   ├── uninstall-runtime.ps1        # 只解除 runtime 的腳本
+│   └── README.txt                   # 給最終使用者的合併版說明（繁體中文）
+├── assets-devpack/                  # dev pack 專用 staging（會包進 ZIP 根目錄）
 │   ├── setup-devpack.ps1            # 註冊離線 NuGet feed + 寫機器層 NuGet.Config
-│   ├── 點擊兩下-uninstall-devpack.cmd
-│   ├── uninstall-devpack.ps1
-│   └── README.txt                   # 給 dev pack 使用者（繁體中文，會包進 dev pack ZIP）
+│   └── uninstall-devpack.ps1
 ├── .github/
 │   ├── workflows/release.yml        # CI：打包 + 離線驗證 + GitHub Release
 │   └── copilot-instructions.md      # 給 Copilot 的 repo 速覽
@@ -93,47 +93,35 @@ dotnet run --project src/PlaywrightOfflinePackager -- \
 
 ## Packager pipeline
 
-`src/PlaywrightOfflinePackager/Program.cs` 是單檔頂層程式，步驟順序：
-
-### Runtime ZIP（永遠會跑）
+`src/PlaywrightOfflinePackager/Program.cs` 是單檔頂層程式，產出**單一 ZIP**
+（runtime + dev pack 全在裡面），步驟順序：
 
 1. **Restore** — `dotnet restore <sample.csproj>`。
 2. **Publish** — `dotnet publish -c Release -r win-x64 --self-contained true` 到暫存 `app/`。
 3. **Verify Playwright driver present** — 強制檢查 `app/.playwright/node/win32_x64/node.exe`
    存在，否則整個打包失敗。**這是整個離線契約最重要的單一檢查點**。
-4. **Stage assets** — 把 `assets/` 內容（兩支 .cmd + 兩支 .ps1 + README.txt）複製到 ZIP 根目錄。
-5. **Write build metadata** — 寫 `BUILD-INFO.txt`（RID、設定、時間）。
-6. **Create ZIP** — 把整個 staging 目錄壓成 `output/PlaywrightOffline-win-x64-<timestamp>.zip`。
-
-### Dev Pack ZIP（傳 `--devpack` 才跑）
-
-7. **Dev pack: restore shell project** — 在暫存資料夾寫一個 minimal `shell.csproj`，
+4. **Restore dev pack (NuGet graph)** — 在暫存資料夾寫一個 minimal `shell.csproj`，
    參照 `Microsoft.Playwright`、`Microsoft.Playwright.NUnit`、`Microsoft.Playwright.MSTest`、
    `Microsoft.NET.Test.Sdk`、`NUnit` + adapter、`MSTest` + adapter，然後跑
    `dotnet restore --packages <tmp> --runtime win-x64 --no-cache`。
-8. **Dev pack: collect .nupkg files** — 遞迴搜出所有 `*.nupkg`，去重後 flatten 到
-   `devpack/nuget/`，並寫 `INDEX.txt`（卸載腳本會用此清單）。
-9. **Dev pack: stage assets** — 把 `assets-devpack/` 內容（setup/uninstall ps1+cmd + README）複製。
-10. **Dev pack: write build metadata** — 寫 `BUILD-INFO.txt`。
-11. **Dev pack: create ZIP** — 產 `output/PlaywrightDevPack-win-x64-<timestamp>.zip`。
+5. **Collect .nupkg files** — 遞迴搜出所有 `*.nupkg`，去重後 flatten 到 `<staging>/nuget/`，
+   並寫 `nuget/INDEX.txt`（卸載腳本會用此清單）。
+6. **Stage runtime assets** — 把 `assets/` 內容（入口 cmd + 入口 ps1 + runtime ps1 + README）
+   複製到 ZIP 根目錄。
+7. **Stage dev pack assets** — 把 `assets-devpack/` 內容（setup-devpack.ps1、uninstall-devpack.ps1）
+   複製到 ZIP 根目錄（與步驟 6 同層）。
+8. **Write build metadata** — 寫 `BUILD-INFO.txt`（RID、設定、時間）。
+9. **Create ZIP** — 把整個 staging 目錄壓成 `output/PlaywrightOffline-win-x64-<timestamp>.zip`。
 
 最終 ZIP 結構：
 
 ```
-PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime, ~70 MB)
+PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime + dev pack, ~350 MB)
 ├── app/                              # self-contained publish 輸出
 │   ├── PlaywrightSampleApp.exe
 │   ├── *.dll                         # .NET runtime + Microsoft.Playwright
 │   └── .playwright/node/win32_x64/node.exe
-├── 點擊兩下-install.cmd
-├── install.ps1
-├── 點擊兩下-uninstall.cmd
-├── uninstall.ps1
-├── README.txt
-└── BUILD-INFO.txt
-
-PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
-├── nuget/
+├── nuget/                            # 離線 NuGet feed（26 nupkgs）
 │   ├── microsoft.playwright.1.60.0.nupkg
 │   ├── microsoft.playwright.nunit.1.60.0.nupkg
 │   ├── microsoft.playwright.mstest.1.60.0.nupkg
@@ -142,9 +130,14 @@ PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
 │   ├── mstest.*.nupkg + mstest.testadapter.*.nupkg
 │   ├── ... (26 unique nupkgs total)
 │   └── INDEX.txt
-├── 點擊兩下-setup-devpack.cmd
-├── setup-devpack.ps1
-├── 點擊兩下-uninstall-devpack.cmd
+├── 點擊兩下-setup.cmd                # 一鍵入口：runtime + dev pack
+├── setup.ps1                         # 呼叫 install.ps1 + setup-devpack.ps1
+├── 點擊兩下-install.cmd              # 進階：只裝 runtime
+├── install.ps1
+├── setup-devpack.ps1                 # 進階：只裝 dev pack
+├── 點擊兩下-uninstall.cmd
+├── uninstall.ps1                     # wrapper: uninstall-devpack → uninstall-runtime
+├── uninstall-runtime.ps1
 ├── uninstall-devpack.ps1
 ├── README.txt
 └── BUILD-INFO.txt
@@ -152,7 +145,21 @@ PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
 
 ---
 
-## install.ps1 / uninstall.ps1 設計
+## 入口腳本設計（setup.ps1 / uninstall.ps1）
+
+- **setup.ps1**：self-elevate → 呼叫同目錄的 `install.ps1`（runtime）→ 呼叫同目錄的
+  `setup-devpack.ps1`（dev pack）。`$ErrorActionPreference = 'Stop'`，runtime 失敗就
+  整個中斷，不會跑 dev pack。
+- **uninstall.ps1**：self-elevate → 呼叫 `uninstall-devpack.ps1`（包 try/catch，**非致命**：
+  失敗只發 warning）→ 呼叫 `uninstall-runtime.ps1`。順序選 dev pack 先是因為 NuGet feed
+  設定不影響 runtime 砍檔，反過來 runtime 砍掉後 dev pack 還是要清；而且 dev pack 的
+  uninstall 不會去動 `PLAYWRIGHT_*` 環境變數，是 `uninstall-runtime.ps1` 才會清。
+- **點擊兩下-setup.cmd** 與其他 cmd 一樣模式：`chcp 65001` → `powershell -NoProfile
+  -ExecutionPolicy Bypass -File %~dp0setup.ps1 %*` → `pause`。
+
+---
+
+## install.ps1 / uninstall-runtime.ps1 設計
 
 - **雙擊體驗**：另附 `點擊兩下-install.cmd` / `點擊兩下-uninstall.cmd` 包裝，本質就是
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*` + `pause`。
@@ -179,7 +186,9 @@ PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
 
 ## Dev Pack 設計
 
-`assets-devpack/` 是 dev pack 專用 staging 來源，與 runtime 的 `assets/` 完全分離。
+dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄）。`assets-devpack/`
+只剩兩支 ps1 腳本，沒有自己的入口 cmd 或 README——共用最外層的 `setup.ps1` /
+`點擊兩下-setup.cmd` / `README.txt`。
 
 - **shell.csproj（packager 內動態產生）**：故意拉一個完整的 NUnit + MSTest + Test SDK
   圖，包含 `Microsoft.Playwright(.NUnit/.MSTest)` 1.60.0。版本寫死，避免每次打包
@@ -188,7 +197,7 @@ PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
   即可，不需要額外裝 nuget.exe；CI 跑得起來。
 - **flatten 策略**：`--packages` 解出的目錄結構是 `{id-lowercase}/{version}/...`，
   每個版本資料夾內有原本的 `.nupkg`。我們遞迴抓所有 `*.nupkg`、用檔名去重（同 id
-  同 version 不會出現兩個 nupkg），複製到 `devpack/nuget/`。產出 26 個唯一檔案。
+  同 version 不會出現兩個 nupkg），複製到 ZIP 內的 `nuget/`。產出 26 個唯一檔案。
 - **為什麼落點選 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`**：這是
   Visual Studio Installer 寫 Offline Packages 的同一個資料夾，VS 安裝後預設
   package source `Microsoft Visual Studio Offline Packages` 就指向它。把我們的
@@ -198,15 +207,16 @@ PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
   setup 用 `[xml]` 物件 idempotent 操作（重覆執行不會堆出重複條目），改前先
   `Copy-Item` 備份為 `.bak.YYYYMMDD-HHMMSS`。
 - **預設不停用 nuget.org**：使用者若偶爾有網路通道，nuget.org 仍可走 fallback；
-  想強制離線可帶 `-DisableNuGetOrg`。
+  想強制離線可帶 `-DisableNuGetOrg`（透過 `setup.ps1` forward 也可）。
 - **冪等設環境變數**：與 `install.ps1` 同樣寫
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0`（Machine
-  scope），讓 dev pack 可單獨使用，不必先裝 runtime ZIP。
+  scope），讓 dev pack 可單獨使用（直接執行 `setup-devpack.ps1`），不必先裝 runtime。
 - **uninstall-devpack.ps1 的限制**：
-  - 用 `INDEX.txt` 當 allow-list，**只**刪我們塞進去的 nupkg；不誤刪
+  - 用 `nuget/INDEX.txt` 當 allow-list，**只**刪我們塞進去的 nupkg；不誤刪
     `Microsoft SDKs\NuGetPackages` 內 VS Installer 既有的套件。
   - 不清 `%USERPROFILE%\.nuget\packages`（其他專案可能在用已 restore 的版本）。
-  - 不清 PLAYWRIGHT_* 環境變數（runtime ZIP 可能還在用）。
+  - 不清 PLAYWRIGHT_* 環境變數（runtime 可能還在用）；那是 `uninstall-runtime.ps1`
+    的工作。
 
 ---
 

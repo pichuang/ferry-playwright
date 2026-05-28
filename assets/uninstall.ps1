@@ -1,6 +1,14 @@
 <#
 .SYNOPSIS
-    Remove the offline Playwright application installed by install.ps1.
+    One-shot offline uninstaller: dev pack + runtime.
+
+.DESCRIPTION
+    Wraps uninstall-devpack.ps1 (offline NuGet feed) and uninstall-runtime.ps1
+    (Playwright runtime app) so end users only need one double-click.
+
+    - Self-elevates once.
+    - Dev pack uninstall runs first; failures are non-fatal so runtime cleanup
+      still proceeds.
 #>
 
 [CmdletBinding()]
@@ -30,25 +38,38 @@ function Invoke-SelfElevate {
 
 if (-not (Test-IsAdmin)) { Invoke-SelfElevate }
 
-Write-Host "Removing $InstallDir ..."
-if (Test-Path $InstallDir) {
-    # Stop any running instance
-    Get-Process -Name 'PlaywrightSampleApp' -ErrorAction SilentlyContinue |
-        Stop-Process -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path $InstallDir -Recurse -Force
-    Write-Host ' Folder removed.'
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+Write-Host ''
+Write-Host '================================================================' -ForegroundColor Cyan
+Write-Host ' Playwright Offline — combined uninstall (dev pack + runtime)'   -ForegroundColor Cyan
+Write-Host '================================================================' -ForegroundColor Cyan
+Write-Host ''
+
+# ---- Step 1: dev pack (non-fatal) ----
+$uninstallDevpackPs1 = Join-Path $scriptDir 'uninstall-devpack.ps1'
+if (Test-Path $uninstallDevpackPs1) {
+    Write-Host '[1/2] Removing offline NuGet dev pack...' -ForegroundColor Cyan
+    try {
+        & $uninstallDevpackPs1
+    } catch {
+        Write-Warning "Dev pack uninstall reported an error: $($_.Exception.Message)"
+        Write-Warning 'Continuing with runtime uninstall.'
+    }
 } else {
-    Write-Host ' Folder not present; skipping.'
+    Write-Host '[1/2] uninstall-devpack.ps1 not found; skipping dev pack cleanup.' -ForegroundColor Yellow
 }
 
-Write-Host 'Clearing environment variables...'
-[Environment]::SetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', $null, 'Machine')
-[Environment]::SetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH', $null, 'Machine')
+# ---- Step 2: runtime ----
+$uninstallRuntimePs1 = Join-Path $scriptDir 'uninstall-runtime.ps1'
+if (-not (Test-Path $uninstallRuntimePs1)) {
+    throw "uninstall-runtime.ps1 not found next to uninstall.ps1: $uninstallRuntimePs1"
+}
+Write-Host ''
+Write-Host '[2/2] Removing Playwright runtime...' -ForegroundColor Cyan
+& $uninstallRuntimePs1 -InstallDir $InstallDir
 
-Write-Host 'Removing shortcuts...'
-$startMenuDir = Join-Path $Env:ProgramData 'Microsoft\Windows\Start Menu\Programs\PlaywrightApp'
-if (Test-Path $startMenuDir) { Remove-Item $startMenuDir -Recurse -Force }
-$desktopLnk = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'PlaywrightApp.lnk'
-if (Test-Path $desktopLnk) { Remove-Item $desktopLnk -Force }
-
-Write-Host 'Uninstall complete.' -ForegroundColor Green
+Write-Host ''
+Write-Host '================================================================' -ForegroundColor Green
+Write-Host ' Uninstall complete.'                                              -ForegroundColor Green
+Write-Host '================================================================' -ForegroundColor Green

@@ -48,30 +48,36 @@
 
 ## 給「拿到 ZIP」的人：怎麼安裝
 
-> 從 v0.4.0（即將發布）起，**每個 release 會附兩個 ZIP**：
-> - `PlaywrightOffline-win-x64-*.zip`（**runtime**）— 給「只要執行」的目標機器，**必裝**。
-> - `PlaywrightDevPack-win-x64-*.zip`（**dev pack**）— 給「想離線寫測試」的開發機器，**選裝**。
->
-> 兩者完全獨立，可單獨使用、也可共存。先裝哪個都行。
+> 從 v0.5.0 起，**每個 release 只附一個 ZIP**：
+> `PlaywrightOffline-win-x64-*.zip`，內含 runtime（執行範例程式）+ dev pack
+> （離線 NuGet feed，可在這台機器 `dotnet add package Microsoft.Playwright`）。
+> 一鍵雙擊一次裝完，也可以只裝其中一邊。
 
-### 安裝 runtime ZIP（目標機）
+### 一鍵安裝（推薦：runtime + dev pack）
 
 1. 把 `PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
-2. 進入解壓後的資料夾，**雙擊** `點擊兩下-install.cmd`。
-3. 接受 UAC 提權對話框。
-4. 等畫面跳出「Installation complete」即完成。
+2. 進入解壓後的資料夾，**雙擊** `點擊兩下-setup.cmd`。
+3. 接受 UAC 提權對話框（只會問一次）。
+4. 等畫面跳出「All done. Runtime + dev pack are installed.」即完成。
 
-> 進階：也可以「右鍵 `install.ps1` → 以 PowerShell 執行」傳入額外參數
-> （例如 `-SkipEdgeCheck`、`-NoShortcuts`、`-InstallDir "D:\Apps\Playwright"`）。
+腳本會依序：
 
-安裝腳本會自動：
+- **[1/2] runtime**：確認 Edge → 複製到 `C:\Program Files\PlaywrightApp\` → 設機器層
+  `PLAYWRIGHT_*` 環境變數 → 建立桌面 / 開始功能表捷徑。
+- **[2/2] dev pack**：把 26 個 .nupkg 複製到 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`
+  （Microsoft 標準離線 feed 位置）→ 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條
+  `PlaywrightOfflineFeed` 來源（舊檔備份為 `.bak.YYYYMMDD-HHMMSS`）。
 
-- 確認 Windows 版本與 Microsoft Edge 是否存在。
-- 把應用程式複製到 `C:\Program Files\PlaywrightApp\`。
-- 設定 Playwright 不要嘗試下載瀏覽器（機器層級環境變數）。
-- 建立開始功能表與桌面捷徑。
+> 進階：傳參數時可改用 `setup.ps1`，例如
+> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -SkipEdgeCheck -DisableNuGetOrg`。
 
-### 安裝完怎麼執行
+### 只想裝其中一邊
+
+- **只裝 runtime**：雙擊 `點擊兩下-install.cmd`（呼叫 `install.ps1`）。
+- **只裝 dev pack**：系統管理員 PowerShell 執行
+  `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1`。
+
+### 安裝完怎麼執行 runtime
 
 打開**新的** PowerShell / Command Prompt（要重新讀環境變數），執行：
 
@@ -91,23 +97,26 @@
 > 純自我測試 (Headless、不等 Enter、直接 PASS/FAIL 退出)：
 > `& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" --ci`
 
+### 安裝完怎麼用 dev pack 寫自己的測試
+
+打開**新的** PowerShell，就能離線新增專案：
+
+```powershell
+mkdir hello-playwright; cd hello-playwright
+dotnet new nunit
+dotnet add package Microsoft.Playwright.NUnit
+```
+
+詳見下方
+「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
+
 ### 解除安裝
 
-在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`（或右鍵 `uninstall.ps1` → 以 PowerShell 執行）。
-腳本會移除程式檔案、清掉環境變數、刪除捷徑。
+在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`。腳本會：
 
-### 安裝 dev pack ZIP（開發機，選裝）
-
-只有當你要在這台機器**寫**新的 Playwright 測試時才需要。
-
-1. 把 `PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip` 解壓縮。
-2. **雙擊** `點擊兩下-setup-devpack.cmd`，接受 UAC。
-3. 看到 "Dev pack installed" 即完成。
-4. 之後任何專案 `dotnet new nunit && dotnet add package Microsoft.Playwright.NUnit`
-   都可以離線完成。詳見下方
-   「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
-
-解除安裝：雙擊 `點擊兩下-uninstall-devpack.cmd`。
+- **[1/2] dev pack**：從機器層 NuGet.Config 移除來源、依 INDEX.txt 刪掉我們塞進去的
+  .nupkg（不會誤刪其他 Microsoft 既有的 offline 套件）。
+- **[2/2] runtime**：移除 `C:\Program Files\PlaywrightApp`、清環境變數、刪捷徑。
 
 ---
 
@@ -121,14 +130,8 @@ cd ferry-playwright
 dotnet run --project src/PlaywrightOfflinePackager
 ```
 
-ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`，把它拷給目標機就好。
-
-想同時產出 dev pack ZIP（給離線開發機 `dotnet add package` 用）：
-
-```bash
-dotnet run --project src/PlaywrightOfflinePackager -- --devpack
-# → 多一個 output/PlaywrightDevPack-win-x64-*.zip
-```
+ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`（runtime + dev pack 都在裡面，
+~350 MB），把它拷給目標機就好。
 
 > 進一步的打包選項、自訂應用、CI 自動發布、架構說明，請參考 **[DEVELOPER.md](DEVELOPER.md)**。
 
@@ -149,16 +152,18 @@ dotnet run --project src/PlaywrightOfflinePackager -- --devpack
    `dotnet add package Microsoft.Playwright` 預設會打 `api.nuget.org` 而失敗。
    有兩種解法：
 
-   - **（推薦）裝我們的 Dev Pack ZIP** — 同一個 release 附上的
-     `PlaywrightDevPack-win-x64-*.zip`。解壓後雙擊
-     `點擊兩下-setup-devpack.cmd`，會把 `Microsoft.Playwright`、
+   - **（推薦）使用我們的 ZIP 一鍵裝完** — 同一個 release 的
+     `PlaywrightOffline-win-x64-*.zip` 已內含離線 NuGet feed。解壓後雙擊
+     `點擊兩下-setup.cmd`，會把 `Microsoft.Playwright`、
      `Microsoft.Playwright.NUnit`、`Microsoft.NET.Test.Sdk`、NUnit、MSTest
      等 .nupkg **複製到 Microsoft 既有的全機器離線 feed 資料夾**
      (`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`)，並在
      `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source。之後任何新專案
      `dotnet add package Microsoft.Playwright` 都跟有 nuget.org 一樣會成功。
+     （只想裝 NuGet feed、不裝範例 runtime 也行：執行
+     `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1` 即可。）
    - 或自行帶整個 `~/.nuget/packages` 過來，或自建內網 NuGet 私服。
-3. **確認環境變數已套用**（runtime ZIP 或 Dev Pack 任一個安裝都會設好）：
+3. **確認環境變數已套用**（雙擊 setup.cmd 後會設好）：
    ```powershell
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD','Machine')  # → 1
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH','Machine')         # → 0
@@ -312,20 +317,22 @@ A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己
 
 **Q：可以用這份安裝來「寫」新的測試嗎？**
 A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://dotnet.microsoft.com/download)）；
-   若機器完全離線，再安裝同 release 的 `PlaywrightDevPack-win-x64-*.zip`
+   ZIP 內的 dev pack 部分（雙擊 `點擊兩下-setup.cmd` 一鍵裝完，或單獨執行
+   `setup-devpack.ps1`）會把 .nupkg 放進機器層離線 NuGet feed，
    解決 NuGet 套件下載問題。詳細步驟見上面
 「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
 我們安裝時設好的環境變數會自動套用到所有新專案，所以只要 launch 時用
 `Channel = "msedge"` 就能離線跑。
 
-**Q：Dev Pack ZIP 跟 runtime ZIP 有什麼不同？**
-A：runtime ZIP（`PlaywrightOffline-*.zip`）是給「只要執行」的目標機；
-Dev Pack ZIP（`PlaywrightDevPack-*.zip`）是給「想寫新測試」的開發機，
-裡面是一組 .nupkg 加上 `setup-devpack.ps1`，安裝後會把 Microsoft.Playwright
-等套件放進 Microsoft 既有的全機器離線 NuGet feed
-(`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`) 並註冊機器層 NuGet source。
-之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。兩個 ZIP
-可以單獨使用，也可以共存。
+**Q：ZIP 裡的 `app/` 跟 `nuget/` 各是什麼？**
+A：`app/` 是 self-contained 的 runtime 範例程式（.NET + Playwright driver +
+系統 Edge）；`nuget/` 是離線 NuGet feed（26 個 .nupkg，含
+Microsoft.Playwright、NUnit、MSTest 等）。雙擊 `點擊兩下-setup.cmd` 會把
+`app/` 內容裝到 `C:\Program Files\PlaywrightApp\`、把 `nuget/` 內容散到
+`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages` 並註冊機器層 NuGet source。
+之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。
+只想裝其中一邊？runtime 雙擊 `點擊兩下-install.cmd`，dev pack 執行
+`setup-devpack.ps1`。
 
 ---
 

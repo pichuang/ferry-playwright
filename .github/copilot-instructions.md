@@ -83,22 +83,31 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   or env vars `CI=true` / `PLAYWRIGHT_CI=1`. In CI mode: `Headless = true`, no
   `Console.ReadLine()`, default URL is `about:blank`. Preserve this contract — the
   workflow's offline test depends on it.
-- **Packager pipeline order** (in `src/PlaywrightOfflinePackager/Program.cs`):
-  Runtime ZIP: `Restore` → `Publish` → **`Verify Playwright driver present`** → `Stage assets` →
-  `Write BUILD-INFO.txt` → `Create ZIP`. The driver-presence verification is the single
-  most important guard — keep it. ZIP must include `app/.playwright/node/win32_x64/node.exe`.
-  Dev pack ZIP (only when `--devpack` flag is passed): `Restore shell project` (synthesized
-  csproj pinning Microsoft.Playwright + .NUnit + .MSTest + Test.Sdk + NUnit + MSTest at fixed
-  versions) → `Collect .nupkg files` (flatten + dedupe + write INDEX.txt) →
-  `Stage dev pack assets` (from `assets-devpack/`) → `Write BUILD-INFO.txt` → `Create dev pack ZIP`.
+- **Packager pipeline order** (in `src/PlaywrightOfflinePackager/Program.cs`) — produces a
+  **single combined ZIP** (`PlaywrightOffline-win-x64-<timestamp>.zip`, ~350 MB) containing
+  both runtime (`app/`) and dev pack (`nuget/`):
+  `Restore` → `Publish` → **`Verify Playwright driver present`** → `Restore dev pack (NuGet graph)`
+  (synthesized shell.csproj pinning Microsoft.Playwright + .NUnit + .MSTest + Test.Sdk +
+  NUnit + MSTest at fixed versions) → `Collect .nupkg files` (flatten + dedupe + write
+  `nuget/INDEX.txt`) → `Stage runtime assets` (from `assets/`) → `Stage dev pack assets`
+  (from `assets-devpack/`) → `Write BUILD-INFO.txt` → `Create ZIP`. The driver-presence
+  verification is the single most important guard — keep it. ZIP must include
+  `app/.playwright/node/win32_x64/node.exe` and `nuget/microsoft.playwright.1.60.0.nupkg`.
+- **Entry scripts inside the ZIP** (all at ZIP root):
+  - `點擊兩下-setup.cmd` → `setup.ps1` → chains `install.ps1` (runtime) then
+    `setup-devpack.ps1` (offline NuGet feed). One UAC prompt covers both.
+  - `點擊兩下-uninstall.cmd` → `uninstall.ps1` → chains `uninstall-devpack.ps1` then
+    `uninstall-runtime.ps1`. Dev pack failures are non-fatal so runtime cleanup still runs.
+  - `點擊兩下-install.cmd` / `install.ps1` — runtime-only install (advanced users).
+  - `setup-devpack.ps1` / `uninstall-devpack.ps1` — dev-pack-only flow (advanced users).
 - **install.ps1** self-elevates, requires Edge unless `-SkipEdgeCheck` is passed, installs
   to `%ProgramFiles%\PlaywrightApp`, sets *machine-scope* env vars, creates Start Menu +
-  Desktop shortcuts. Mirror any change in `uninstall.ps1`.
+  Desktop shortcuts. Mirror any change in `uninstall-runtime.ps1`.
 - **setup-devpack.ps1** (in `assets-devpack/`) self-elevates, copies bundled `.nupkg` files
   into `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages` (the standard Microsoft offline
   feed folder), registers it as `PlaywrightOfflineFeed` in `%ProgramData%\NuGet\NuGet.Config`
   (idempotent XML edit with `.bak.YYYYMMDD-HHMMSS` backup), and idempotently sets the same
-  `PLAYWRIGHT_*` env vars as `install.ps1` so the dev pack works standalone. Does NOT
+  `PLAYWRIGHT_*` env vars as `install.ps1` so the dev pack can run standalone. Does NOT
   disable nuget.org by default. `uninstall-devpack.ps1` removes only the .nupkg files
   listed in `nuget/INDEX.txt` — never sweeps the shared folder.
 - **Versioning / changelog**: bumps go in `CHANGELOG.md` (Keep a Changelog style) and are
