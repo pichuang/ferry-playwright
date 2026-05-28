@@ -10,7 +10,7 @@
 
 | 項目 | 版本 |
 | --- | --- |
-| ferry-playwright | **v0.5.1**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| ferry-playwright | **v0.5.2**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
 | Microsoft.Playwright (.NET) | **1.60.0** |
 | .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
 | 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
@@ -209,13 +209,33 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 1. 安裝擴充套件：
    - **C# Dev Kit**（Microsoft 官方，含 IntelliSense + Test Explorer）
    - 選用：**Playwright Test for VSCode**（如果你之後想加 trace viewer 整合）
-2. 建立 NUnit 測試專案：
+2. 用我們的 helper 建立離線 NUnit 測試專案（**強烈推薦**，避開所有 NuGet 雷區）：
+   ```powershell
+   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwTests
+   cd MyPwTests
+   code .
+   ```
+   > Helper 會在新專案根目錄寫一份 `NuGet.config`，內含 `<clear />` 把所有繼承
+   > 的 NuGet source 都清掉，只留 PlaywrightOfflineFeed；接著用**鎖定的版本**
+   > 跑 `dotnet new nunit` + `dotnet add package`，所以無論你的個人 / 機器 / 公司
+   > 層 NuGet 設定有多奇怪、`dotnet new nunit` 模板想抓哪個版本，全部都會走離線。
+3. 若你**堅持手動**用 `dotnet new nunit; dotnet add package ...`，請先在新專案根
+   目錄複製一份 `NuGet.config.template` 改名成 `NuGet.config`：
    ```powershell
    mkdir MyPwTests; cd MyPwTests
+   Copy-Item "$Env:ProgramFiles\PlaywrightApp\NuGet.config.template" .\NuGet.config
    dotnet new nunit
-   dotnet add package Microsoft.Playwright.NUnit
+   dotnet add package Microsoft.Playwright       --version 1.60.0
+   dotnet add package Microsoft.Playwright.NUnit --version 1.60.0
    ```
-3. 把預設 `UnitTest1.cs` 內容換成：
+   > **為什麼一定要這個 NuGet.config？**
+   > 機器層 `disabledPackageSources` 只能擋 `nuget.org`，擋不掉使用者層
+   > (`%AppData%\Roaming\NuGet\NuGet.Config`) 帶進來的其他 remote source
+   > （公司 Azure DevOps feed / 內部 proxy 等）。NuGet 不指定版本時會把所有
+   > enabled source 都打一輪查 latest，於是離線機就會丟出
+   > `SSL connection could not be established` / `received an unexpected EOF`
+   > 之類錯誤。專案層 `<clear />` 直接把所有繼承的 source 通通清空，最穩。
+4. 把預設 `UnitTest1.cs` 內容換成：
    ```csharp
    using Microsoft.Playwright;
    using Microsoft.Playwright.NUnit;
@@ -259,10 +279,18 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 
 ### 在 Visual Studio
 
-1. **File → New → Project** 選擇 **NUnit Test Project (.NET)**。
-2. 在 Solution Explorer 對專案右鍵 → **Manage NuGet Packages**，搜尋並安裝
-   `Microsoft.Playwright.NUnit`（會自動帶入 `Microsoft.Playwright`）。
-3. 同樣把預設測試類別內容換成上面 VS Code 段落裡的 `HelloTests` 範例。
+1. 用 helper 先建專案再用 VS 開：
+   ```powershell
+   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwTests
+   ```
+   然後 VS：**File → Open → Project/Solution**，選 `MyPwTests\MyPwTests.csproj`。
+   （這樣可以保證 project-local `NuGet.config` 已就位，VS 的 NuGet 還原也只會
+   看到 PlaywrightOfflineFeed。）
+2. 如果你**從 VS New Project 對話框**建，記得：建完後**立刻**
+   把 `%ProgramFiles%\PlaywrightApp\NuGet.config.template` 複製到專案根目錄
+   改名 `NuGet.config`，再開始 Manage NuGet Packages，否則 VS 預設仍會嘗試
+   `api.nuget.org`。
+3. 把預設測試類別內容換成上面 VS Code 段落裡的 `HelloTests` 範例。
 4. 開啟 **Test Explorer**（View → Test Explorer，或 `Ctrl+E, T`），按 **Run All** (`Ctrl+R, A`)。
 5. 如果遇到「找不到瀏覽器」之類錯誤：請確認你**沒有**在專案任何地方呼叫
    `Microsoft.Playwright.Program.Main(new[] {"install"})`（那會嘗試下載 Chromium）。
@@ -270,15 +298,22 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 
 ### 在 PowerShell（純命令列）
 
-若不需要 IDE，最快的方式是直接 console app：
+最快路徑是用 helper 跑 console 模板：
+
+```powershell
+& "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwScript -Template console
+cd MyPwScript
+# 把 Program.cs 換成下面內容，然後：
+dotnet run
+```
+
+不用 helper 的話，記得先丟 NuGet.config 進去：
 
 ```powershell
 mkdir MyPwScript; cd MyPwScript
+Copy-Item "$Env:ProgramFiles\PlaywrightApp\NuGet.config.template" .\NuGet.config
 dotnet new console
-dotnet add package Microsoft.Playwright
-
-# 用記事本或 vim 把 Program.cs 換成下面內容，然後：
-dotnet run
+dotnet add package Microsoft.Playwright --version 1.60.0
 ```
 
 最小 `Program.cs`：
@@ -319,6 +354,20 @@ result: Hello from PowerShell!
 ---
 
 ## 常見問題
+
+**Q：跑 `dotnet new nunit` 或 `dotnet add package ...` 還是出現
+`The SSL connection could not be established` / `received an unexpected EOF`？**
+A：你的個人 NuGet 設定（`%AppData%\Roaming\NuGet\NuGet.Config`）或公司
+group policy 帶進了**其他 remote NuGet source**（例如內部 Azure DevOps feed），
+即便 v0.5.2 把 `nuget.org` 停用，dotnet 還是會把它們打一輪。
+**解法**：直接用我們的 helper：
+```powershell
+& "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
+```
+它會在新專案根目錄放一份 `NuGet.config`（`<clear />` + 只有 PlaywrightOfflineFeed），
+不管任何上層設定都會被蓋掉。或是手動把
+`%ProgramFiles%\PlaywrightApp\NuGet.config.template` 複製到專案根目錄改名
+`NuGet.config`，效果一樣。
 
 **Q：安裝時跳出「Microsoft Edge was not detected」怎麼辦？**
 A：Windows 11 / Server 2022 預設都有 Edge；若被特殊映像移除，可重新安裝 Edge，

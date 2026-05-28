@@ -211,13 +211,26 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
   場景沒有 VS 的 NuGet config，所以需要在機器層 NuGet.Config 顯式加 source。
   setup 用 `[xml]` 物件 idempotent 操作（重覆執行不會堆出重複條目），改前先
   `Copy-Item` 備份為 `.bak.YYYYMMDD-HHMMSS`。
-- **預設停用 nuget.org（v0.5.1 起）**：`dotnet add package <id>` 沒指定版本時，
-  NuGet client 會去所有 enabled sources 查 latest version，即便 PlaywrightOfflineFeed
-  已是其中之一也一樣會打 `api.nuget.org`，在離線機 → DNS 失敗。所以 setup-devpack
-  預設把 nuget.org 加進 `disabledPackageSources`，把 dev pack 行為對齊 runtime 的
-  「嚴格離線」契約。如果機器是「偶爾離線」情境，帶 `-KeepNuGetOrg` 跑就保留
-  nuget.org（重跑時也會移除舊的 disable 條目，能切回混合模式）。
-  `-DisableNuGetOrg` 旗標保留但已成預設、未來移除。
+- **預設停用 nuget.org（v0.5.1 起）+ 專案層 `<clear />`（v0.5.2 起）**：
+  - 機器層 disable nuget.org 解決了「dotnet add package 沒指定版本時偷打
+    api.nuget.org 找 latest」。但 v0.5.1 之後使用者回報「還是 SSL 錯」——
+    根因是 NuGet config 是**層疊式**：使用者層 (`%AppData%\Roaming\NuGet\NuGet.Config`)、
+    solution-level、project-local 都會 merge 進來。如果使用者層宣告了其他
+    remote source（例如公司 Azure DevOps feed），即便我們 disable 了
+    nuget.org，dotnet 還是會把那些 source 打一輪 → SSL 錯。
+  - 解法是「**專案層**寫一份只含 `<clear />` + PlaywrightOfflineFeed 的
+    NuGet.config」。`<clear />` 在 NuGet 規格裡是「丟掉所有繼承的 sources」，
+    所以無論上層怎麼髒，restore 都只看得到 PlaywrightOfflineFeed。
+  - 我們 ship 兩個東西：
+    - `assets/NuGet.config.template`：給「手動派」直接 copy 用。
+    - `assets/new-playwright-project.ps1`：helper script。`dotnet new <tpl> --no-restore`
+      之前先把 template copy 進新專案，然後用**鎖定版本**（與 packager
+      bundle 一致：Playwright 1.60.0、NUnit 4.2.2、MSTest 3.6.4、Test.Sdk
+      17.11.1）跑 `dotnet add package`，最後一次 restore。
+  - 機器層 disable 仍保留（屬於 defense-in-depth），`-KeepNuGetOrg` 可關掉。
+  - 兩支檔案會被 packager 包進 ZIP 根目錄，並由 `install.ps1` 額外 copy 到
+    `%ProgramFiles%\PlaywrightApp\`，這樣安裝後從任何路徑都能直接呼叫
+    `& "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1"`。
 - **冪等設環境變數**：與 `install.ps1` 同樣寫
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0`（Machine
   scope），讓 dev pack 可單獨使用（直接執行 `setup-devpack.ps1`），不必先裝 runtime。

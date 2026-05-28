@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-28
+
+### Added
+- **`new-playwright-project.ps1` helper script** — bootstraps a new offline
+  Playwright project in one command:
+  ```
+  & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
+  ```
+  Supports `-Template nunit | mstest | console`. The helper drops a project-local
+  `NuGet.config` with `<clear />` + only `PlaywrightOfflineFeed`, runs
+  `dotnet new <template> --no-restore`, then `dotnet add package` with versions
+  pinned to what the dev pack actually bundles (Playwright 1.60.0, NUnit 4.2.2,
+  MSTest 3.6.4, Test.Sdk 17.11.1), then `dotnet restore`. Fully offline.
+- **`NuGet.config.template`** — a copy-paste-ready project-local NuGet config
+  for users who want to bootstrap manually instead of using the helper.
+- Both files are staged into `%ProgramFiles%\PlaywrightApp\` by `install.ps1`
+  AND included at the ZIP root for the dev-pack-only path.
+
+### Fixed
+- `dotnet new nunit` / `dotnet add package <id>` no longer report
+  `The SSL connection could not be established` / `received an unexpected EOF`
+  on machines whose user-scope `%AppData%\Roaming\NuGet\NuGet.Config` (or group
+  policy) declares additional remote NuGet sources beyond `nuget.org` (for
+  example, a corporate Azure DevOps feed). v0.5.1's machine-scope disable
+  only covered `nuget.org`; the new project-local `NuGet.config` (via the
+  helper or the template) uses `<clear />` to wipe **every** inherited source,
+  regardless of layer or how it was injected.
+
 ## [0.5.1] - 2026-05-28
 
 ### Changed

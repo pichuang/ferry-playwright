@@ -30,6 +30,9 @@
   uninstall-runtime.ps1         只解除 A 的腳本
   uninstall-devpack.ps1         只解除 B 的腳本
 
+  new-playwright-project.ps1    新建離線專案 helper（v0.5.2 新增；強烈推薦）
+  NuGet.config.template         專案層 NuGet 設定範本（手動 fallback 用）
+
   BUILD-INFO.txt                建置時間與設定資訊
   README.txt                    本檔
 
@@ -90,14 +93,20 @@
 
 如何驗證 dev pack
 -----------------
-  安裝完成後，**開一個全新的** PowerShell：
+  安裝完成後，**開一個全新的** PowerShell，用我們的 helper 一行建立離線專案：
 
-      mkdir hello-playwright
-      cd hello-playwright
-      dotnet new nunit
-      dotnet add package Microsoft.Playwright.NUnit
+      & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name hello-pw
 
-  套件能順利加入就代表離線 feed 生效（過程不需網路）。寫測試時記得：
+  這支 helper 會：
+    1) 建立資料夾 hello-pw
+    2) 寫一份「專案層 NuGet.config」（含 <clear /> 只留 PlaywrightOfflineFeed）
+    3) 跑 dotnet new nunit --no-restore
+    4) 用**鎖定的**版本（Playwright 1.60.0、NUnit 4.2.2 等）跑 dotnet add package
+    5) 最後 dotnet restore，整個過程完全離線
+
+  如果整個跑完最後印出「Project created and restored 100% offline.」就成功。
+
+  寫測試時記得：
 
   * Launch 瀏覽器時務必指定 `Channel = "msedge"`：
 
@@ -109,6 +118,11 @@
         });
 
   * 不要呼叫 `playwright install` —— 本 dev pack 不含 Chromium 二進位。
+
+  Helper 也支援 -Template mstest 與 -Template console：
+
+      & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyMstest -Template mstest
+      & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyScript -Template console
 
 
 如何解除安裝
@@ -142,6 +156,19 @@
   * 雙擊 .exe 跳出 SmartScreen 警告
         - 本範例 binary 未經程式碼簽章。點「其他資訊」→「仍要執行」即可，
           或請貴公司用自有的程式碼簽章憑證簽過再分發。
+
+  * `dotnet add package <id>` 出現「The SSL connection could not be established」
+    或「received an unexpected EOF」
+        - 你的個人 NuGet.Config (`%AppData%\Roaming\NuGet\NuGet.Config`) 或
+          公司 group policy 加進了**其他 remote NuGet source**（例如內部
+          Azure DevOps feed），dotnet 還是會把它們打一輪。
+        - 用我們的 helper 建專案最穩：
+              & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
+          它會在新專案根目錄寫一份 NuGet.config，含 <clear /> 把所有繼承的
+          source 都清掉，只留 PlaywrightOfflineFeed。
+        - 已經建好的專案要修：複製
+              %ProgramFiles%\PlaywrightApp\NuGet.config.template
+          到專案根目錄改名 NuGet.config，再 dotnet restore 即可。
 
   * `dotnet add package Microsoft.Playwright` 還是說連不到 nuget.org
         - v0.5.1 起 setup-devpack.ps1 預設已停用 nuget.org，不應再看到此錯誤。

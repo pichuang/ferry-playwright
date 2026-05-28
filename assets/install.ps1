@@ -166,6 +166,18 @@ Copy-Item -Path (Join-Path $payload '*') -Destination $InstallDir -Recurse -Forc
 if (Test-Path $newVersionFile) {
     Copy-Item -Path $newVersionFile -Destination (Join-Path $InstallDir 'VERSION.txt') -Force
 }
+
+# Stage the offline-project bootstrap helper alongside the runtime exe so users
+# can run it from any new shell after install:
+#   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
+$helperFiles = @('new-playwright-project.ps1', 'NuGet.config.template')
+foreach ($hf in $helperFiles) {
+    $src = Join-Path $scriptDir $hf
+    if (Test-Path $src) {
+        Copy-Item -Path $src -Destination (Join-Path $InstallDir $hf) -Force
+        Write-Host (" + helper    : {0}" -f $hf)
+    }
+}
 Write-Host ' Done.'
 
 # Environment variables (machine scope)
