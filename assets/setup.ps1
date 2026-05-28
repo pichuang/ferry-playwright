@@ -1,23 +1,29 @@
 <#
 .SYNOPSIS
-    One-shot offline installer: runtime + dev pack.
+    One-shot offline installer (v0.6+) — installs the dev pack only.
 
 .DESCRIPTION
-    Wraps install.ps1 (Playwright runtime app) and setup-devpack.ps1 (offline
-    NuGet feed) so end users only need one double-click.
+    Thin wrapper around setup-devpack.ps1. From v0.6.0 onward there is no
+    "runtime" portion to install: the ZIP no longer ships a precompiled
+    PlaywrightSampleApp.exe. After running this script:
 
-    - Self-elevates once; both inner scripts inherit the elevated session.
-    - Runtime install runs first; if it fails the dev pack step is skipped.
-    - Forwards -SkipEdgeCheck to install.ps1, and -KeepNuGetOrg /
-      -DisableNuGetOrg (deprecated alias) to setup-devpack.ps1.
+      - Bundled .nupkg files live in %ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages
+      - Machine-level NuGet.Config registers PlaywrightOfflineFeed
+      - Machine env vars PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1,
+        PLAYWRIGHT_BROWSERS_PATH=0 are set
+      - You can `cd samples\hello-nunit; dotnet test --settings .runsettings`
+
+    To clean up an old v0.5.x install (PlaywrightApp under %ProgramFiles%),
+    run uninstall.ps1 once — it will best-effort remove that legacy folder
+    before installing.
+
+    Forwards -KeepNuGetOrg to setup-devpack.ps1.
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$SkipEdgeCheck,
     [switch]$KeepNuGetOrg,
-    [switch]$DisableNuGetOrg,
-    [string]$InstallDir = (Join-Path $Env:ProgramFiles 'PlaywrightApp')
+    [switch]$DisableNuGetOrg  # deprecated alias; default is already offline-only
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,9 +38,7 @@ function Invoke-SelfElevate {
     Write-Host 'Setup requires Administrator. Relaunching elevated...' -ForegroundColor Yellow
     $scriptPath = $MyInvocation.PSCommandPath
     if (-not $scriptPath) { $scriptPath = $PSCommandPath }
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"",
-                 '-InstallDir', "`"$InstallDir`"")
-    if ($SkipEdgeCheck)   { $argList += '-SkipEdgeCheck' }
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"")
     if ($KeepNuGetOrg)    { $argList += '-KeepNuGetOrg' }
     if ($DisableNuGetOrg) { $argList += '-DisableNuGetOrg' }
     Start-Process -FilePath 'powershell.exe' -ArgumentList $argList -Verb RunAs
@@ -47,27 +51,37 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host ''
 Write-Host '================================================================' -ForegroundColor Cyan
-Write-Host ' Playwright Offline — combined setup (runtime + dev pack)'       -ForegroundColor Cyan
+Write-Host ' Playwright Offline — setup (dev pack)'                            -ForegroundColor Cyan
 Write-Host '================================================================' -ForegroundColor Cyan
 Write-Host ''
 
-# ---- Step 1: runtime ----
-$installPs1 = Join-Path $scriptDir 'install.ps1'
-if (-not (Test-Path $installPs1)) {
-    throw "install.ps1 not found next to setup.ps1: $installPs1"
+# Best-effort: clear out a v0.5.x runtime install (no error if missing).
+$legacyRuntimeDir = Join-Path $Env:ProgramFiles 'PlaywrightApp'
+if (Test-Path $legacyRuntimeDir) {
+    Write-Host "Detected legacy v0.5.x runtime install at: $legacyRuntimeDir" -ForegroundColor Yellow
+    Write-Host 'Removing it (v0.6+ no longer installs a precompiled runtime).' -ForegroundColor Yellow
+    try {
+        Remove-Item -Recurse -Force -Path $legacyRuntimeDir
+        Write-Host '  ✓ Legacy runtime folder removed.'
+    } catch {
+        Write-Warning "Could not fully remove $legacyRuntimeDir : $($_.Exception.Message)"
+    }
+    foreach ($shortcut in @(
+        (Join-Path $Env:ProgramData 'Microsoft\Windows\Start Menu\Programs\PlaywrightApp.lnk'),
+        (Join-Path $Env:PUBLIC 'Desktop\PlaywrightApp.lnk')
+    )) {
+        if (Test-Path $shortcut) {
+            try { Remove-Item -Force -Path $shortcut } catch { }
+        }
+    }
 }
-Write-Host '[1/2] Installing Playwright runtime...' -ForegroundColor Cyan
-$installArgs = @{ InstallDir = $InstallDir }
-if ($SkipEdgeCheck) { $installArgs['SkipEdgeCheck'] = $true }
-& $installPs1 @installArgs
 
-# ---- Step 2: dev pack ----
+# Run dev pack installer.
 $setupDevpackPs1 = Join-Path $scriptDir 'setup-devpack.ps1'
 if (-not (Test-Path $setupDevpackPs1)) {
     throw "setup-devpack.ps1 not found next to setup.ps1: $setupDevpackPs1"
 }
-Write-Host ''
-Write-Host '[2/2] Installing offline NuGet dev pack...' -ForegroundColor Cyan
+
 $devpackArgs = @{}
 if ($KeepNuGetOrg)    { $devpackArgs['KeepNuGetOrg']    = $true }
 if ($DisableNuGetOrg) { $devpackArgs['DisableNuGetOrg'] = $true }
@@ -75,5 +89,12 @@ if ($DisableNuGetOrg) { $devpackArgs['DisableNuGetOrg'] = $true }
 
 Write-Host ''
 Write-Host '================================================================' -ForegroundColor Green
-Write-Host ' All done. Runtime + dev pack are installed.'                    -ForegroundColor Green
+Write-Host ' Dev pack installed.'                                              -ForegroundColor Green
 Write-Host '================================================================' -ForegroundColor Green
+Write-Host ''
+Write-Host ' Next steps:' -ForegroundColor Cyan
+Write-Host ('   1) Copy "samples\hello-nunit" (or hello-mstest / hello-console) out of the ZIP folder.')
+Write-Host ('   2) cd into the copy.')
+Write-Host ('   3) Run: dotnet test --settings .runsettings   (or "dotnet run" for hello-console)')
+Write-Host ''
+Write-Host ' To start a fresh project, see: new-playwright-project.ps1'        -ForegroundColor Cyan

@@ -2,20 +2,29 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 
-// PlaywrightOfflinePackager
-// 一鍵將 PlaywrightSampleApp 打包為單一離線 ZIP，內含：
-//   - app/                          self-contained .NET runtime + Playwright driver
-//   - nuget/                        offline NuGet feed (Microsoft.Playwright + test frameworks)
-//   - setup.ps1 / install.ps1 / setup-devpack.ps1  入口腳本
-//   - uninstall.ps1 / uninstall-runtime.ps1 / uninstall-devpack.ps1
-// 使用方式: dotnet run --project src/PlaywrightOfflinePackager -- [--rid win-x64] [--config Release] [--output output]
+// PlaywrightOfflinePackager (v0.6+)
+// 將離線 NuGet feed + 三個 sample 原始碼專案打包成單一 ZIP。
+//
+// ZIP 內容：
+//   - nuget/                        offline NuGet feed (.nupkg + INDEX.txt)
+//   - samples/{hello-nunit,hello-mstest,hello-console}/  範例原始碼
+//   - setup.ps1 / setup-devpack.ps1                      安裝腳本
+//   - uninstall.ps1 / uninstall-devpack.ps1
+//   - new-playwright-project.ps1 / NuGet.config.template
+//   - README.txt / VERSION.txt / BUILD-INFO.txt
+//
+// 從 v0.6.0 起 ZIP 不再包含預編譯的 PlaywrightSampleApp.exe；範例改成
+// 提供原始碼，使用者照 samples/<name>/README.md 即可 build/test。
+//
+// 使用方式: dotnet run --project src/PlaywrightOfflinePackager
+//           -- [--rid win-x64] [--config Release] [--output output]
 
 string rid = "win-x64";
 string config = "Release";
 string outputDir = "output";
-string sampleProject = "src/PlaywrightSampleApp/PlaywrightSampleApp.csproj";
 string assetsDir = "assets";
 string assetsDevpackDir = "assets-devpack";
+string assetsSamplesDir = "assets-samples";
 string? versionOverride = null;
 
 for (var i = 0; i < args.Length; i++)
@@ -25,9 +34,9 @@ for (var i = 0; i < args.Length; i++)
         case "--rid": rid = args[++i]; break;
         case "--config": config = args[++i]; break;
         case "--output": outputDir = args[++i]; break;
-        case "--project": sampleProject = args[++i]; break;
         case "--assets": assetsDir = args[++i]; break;
         case "--assets-devpack": assetsDevpackDir = args[++i]; break;
+        case "--assets-samples": assetsSamplesDir = args[++i]; break;
         case "--version": versionOverride = args[++i]; break;
         case "-h":
         case "--help":
@@ -41,25 +50,23 @@ for (var i = 0; i < args.Length; i++)
 }
 
 string repoRoot = ResolveRepoRoot();
-sampleProject = Path.GetFullPath(Path.Combine(repoRoot, sampleProject));
 assetsDir = Path.GetFullPath(Path.Combine(repoRoot, assetsDir));
 assetsDevpackDir = Path.GetFullPath(Path.Combine(repoRoot, assetsDevpackDir));
+assetsSamplesDir = Path.GetFullPath(Path.Combine(repoRoot, assetsSamplesDir));
 outputDir = Path.GetFullPath(Path.Combine(repoRoot, outputDir));
 
-if (!File.Exists(sampleProject))
+foreach (var (label, path) in new[]
 {
-    Console.Error.WriteLine($"Sample project not found: {sampleProject}");
-    return 1;
-}
-if (!Directory.Exists(assetsDir))
+    ("assets", assetsDir),
+    ("assets-devpack", assetsDevpackDir),
+    ("assets-samples", assetsSamplesDir),
+})
 {
-    Console.Error.WriteLine($"Assets folder not found: {assetsDir}");
-    return 1;
-}
-if (!Directory.Exists(assetsDevpackDir))
-{
-    Console.Error.WriteLine($"Dev pack assets folder not found: {assetsDevpackDir}");
-    return 1;
+    if (!Directory.Exists(path))
+    {
+        Console.Error.WriteLine($"{label} folder not found: {path}");
+        return 1;
+    }
 }
 
 Directory.CreateDirectory(outputDir);
@@ -68,58 +75,29 @@ string packageVersion = ResolvePackageVersion(repoRoot, versionOverride);
 
 string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 string stagingRoot = Path.Combine(Path.GetTempPath(), $"playwright-offline-{timestamp}");
-string appStaging = Path.Combine(stagingRoot, "app");
 string nugetStaging = Path.Combine(stagingRoot, "nuget");
+string samplesStaging = Path.Combine(stagingRoot, "samples");
 string devpackRestoreTmp = Path.Combine(Path.GetTempPath(), $"playwright-devpack-restore-{timestamp}");
-Directory.CreateDirectory(appStaging);
 Directory.CreateDirectory(nugetStaging);
+Directory.CreateDirectory(samplesStaging);
 Directory.CreateDirectory(devpackRestoreTmp);
 
 Console.WriteLine("================================================================");
-Console.WriteLine(" Playwright Offline Packager (runtime + dev pack, single ZIP)");
+Console.WriteLine(" Playwright Offline Packager (dev pack + sample sources)");
 Console.WriteLine("================================================================");
 Console.WriteLine($" RID            : {rid}");
 Console.WriteLine($" Version        : {packageVersion}");
 Console.WriteLine($" Config         : {config}");
-Console.WriteLine($" Project        : {sampleProject}");
 Console.WriteLine($" Assets         : {assetsDir}");
 Console.WriteLine($" Dev pack assets: {assetsDevpackDir}");
+Console.WriteLine($" Samples        : {assetsSamplesDir}");
 Console.WriteLine($" Staging        : {stagingRoot}");
 Console.WriteLine($" Output dir     : {outputDir}");
 Console.WriteLine("================================================================");
 
 try
 {
-    // STEP 1: dotnet restore
-    Step("Restore", () => RunDotnet(repoRoot, "restore", sampleProject));
-
-    // STEP 2: dotnet publish (self-contained)
-    Step("Publish", () => RunDotnet(repoRoot,
-        "publish", sampleProject,
-        "-c", config,
-        "-r", rid,
-        "--self-contained", "true",
-        "-p:PublishSingleFile=false",
-        "-p:PublishReadyToRun=false",
-        "-o", appStaging));
-
-    // STEP 3: sanity check — Playwright node driver must be inside publish output
-    Step("Verify Playwright driver present", () =>
-    {
-        var driverProbe = Path.Combine(appStaging, ".playwright", "node");
-        if (!Directory.Exists(driverProbe))
-            throw new InvalidOperationException(
-                $"Playwright driver folder not found at '{driverProbe}'. " +
-                "Microsoft.Playwright NuGet may not have copied driver assets to publish output.");
-        var nodeExe = Directory.GetFiles(driverProbe, "node.exe", SearchOption.AllDirectories);
-        if (nodeExe.Length == 0)
-            throw new InvalidOperationException(
-                "node.exe (Playwright driver host) not found under .playwright/node. " +
-                "Offline package would fail at runtime.");
-        Console.WriteLine($"   Found driver: {nodeExe[0]}");
-    });
-
-    // STEP 4: synthesize shell project and restore the full Playwright + test-framework graph
+    // STEP 1: synthesize shell project and restore the full Playwright + test-framework graph
     Step("Restore dev pack (NuGet graph)", () =>
     {
         string shellDir = Path.Combine(devpackRestoreTmp, "shell");
@@ -157,7 +135,7 @@ try
             "--verbosity", "minimal");
     });
 
-    // STEP 5: flatten .nupkg files to <staging>/nuget/ and write INDEX.txt
+    // STEP 2: flatten .nupkg files to <staging>/nuget/ and write INDEX.txt
     Step("Collect .nupkg files", () =>
     {
         string packagesDir = Path.Combine(devpackRestoreTmp, "packages");
@@ -187,30 +165,43 @@ try
         Console.WriteLine($"   Collected {collected.Count} unique .nupkg files.");
     });
 
-    // STEP 6: copy assets (setup.ps1, install.ps1, uninstall*, README.txt, cmd wrappers) into staging root
+    // STEP 3: copy assets-samples/ → staging samples/ (the three reference projects)
+    Step("Stage sample projects", () =>
+    {
+        CopyDirectory(assetsSamplesDir, samplesStaging, overwrite: true);
+        var dirs = Directory.GetDirectories(samplesStaging);
+        Console.WriteLine($"   Staged {dirs.Length} sample project(s): "
+            + string.Join(", ", dirs.Select(Path.GetFileName)));
+    });
+
+    // STEP 4: copy assets (setup.ps1, uninstall.ps1, README.txt, cmd wrappers, helper script)
     Step("Stage runtime assets", () => CopyDirectory(assetsDir, stagingRoot, overwrite: true));
 
-    // STEP 7: copy dev pack assets (setup-devpack.ps1, uninstall-devpack.ps1) into staging root
+    // STEP 5: copy dev pack assets (setup-devpack.ps1, uninstall-devpack.ps1)
     Step("Stage dev pack assets", () => CopyDirectory(assetsDevpackDir, stagingRoot, overwrite: true));
 
-    // STEP 8: write build metadata
+    // STEP 6: write build metadata
     Step("Write build metadata", () =>
     {
         var meta = $"""
-            Playwright Offline Package (runtime + dev pack)
-            ================================================
-            Version     : {packageVersion}
-            Built on    : {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}
-            RID         : {rid}
-            Configuration: {config}
-            Source      : {Path.GetFileName(sampleProject)}
-            Contents    : app/ (runtime), nuget/ (offline NuGet feed)
+            Playwright Offline Package (dev pack + sample sources)
+            ======================================================
+            Version       : {packageVersion}
+            Built on      : {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}
+            RID           : {rid}
+            Configuration : {config}
+            Contents      : nuget/ (offline NuGet feed),
+                            samples/ (hello-nunit, hello-mstest, hello-console)
+
+            From v0.6.0 onward this ZIP does NOT contain a precompiled
+            PlaywrightSampleApp.exe. Use the sample source projects under
+            samples/ as the reference for building your own offline tests.
             """;
         File.WriteAllText(Path.Combine(stagingRoot, "BUILD-INFO.txt"), meta);
         File.WriteAllText(Path.Combine(stagingRoot, "VERSION.txt"), packageVersion + Environment.NewLine);
     });
 
-    // STEP 9: zip
+    // STEP 7: zip
     string zipName = $"PlaywrightOffline-v{packageVersion}-{rid}-{timestamp}.zip";
     string zipPath = Path.Combine(outputDir, zipName);
     Step("Create ZIP", () =>
@@ -229,7 +220,7 @@ try
     Console.WriteLine();
     Console.WriteLine(" Transfer this ZIP to the offline Windows machine,");
     Console.WriteLine(" extract it, then double-click '點擊兩下-完整安裝(推薦).cmd'");
-    Console.WriteLine(" to install runtime + dev pack in one shot.");
+    Console.WriteLine(" to install the dev pack. Sample source under samples/.");
     return 0;
 }
 catch (Exception ex)
@@ -317,7 +308,6 @@ static string ResolveRepoRoot()
             return dir.FullName;
         dir = dir.Parent;
     }
-    // Fallback: current working dir
     return Directory.GetCurrentDirectory();
 }
 
@@ -384,13 +374,13 @@ static void PrintHelp()
     Console.WriteLine("  --rid <id>              Runtime identifier (default: win-x64)");
     Console.WriteLine("  --config <name>         Build configuration (default: Release)");
     Console.WriteLine("  --output <dir>          Output directory relative to repo root (default: output)");
-    Console.WriteLine("  --project <path>        Sample project to publish");
-    Console.WriteLine("                          (default: src/PlaywrightSampleApp/PlaywrightSampleApp.csproj)");
     Console.WriteLine("  --assets <dir>          Runtime assets folder (default: assets)");
     Console.WriteLine("  --assets-devpack <dir>  Dev pack assets folder (default: assets-devpack)");
+    Console.WriteLine("  --assets-samples <dir>  Sample projects folder (default: assets-samples)");
     Console.WriteLine("  --version <semver>      Package version stamped into VERSION.txt / BUILD-INFO.txt");
     Console.WriteLine("                          (default: $PACKAGE_VERSION env > git describe > 0.0.0-dev)");
     Console.WriteLine("  -h, --help              Show this help");
     Console.WriteLine();
-    Console.WriteLine("Produces a single ZIP combining runtime + offline NuGet dev pack.");
+    Console.WriteLine("Produces a single ZIP containing the offline NuGet dev pack and");
+    Console.WriteLine("three reference sample projects under samples/.");
 }

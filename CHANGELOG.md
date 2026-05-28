@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-28
+
+### BREAKING
+- **ZIP no longer contains a precompiled `PlaywrightSampleApp.exe`** under
+  `app/`. The "runtime" portion of the package has been removed because the
+  binary on its own has little reference value for users learning to write
+  offline Playwright projects.
+- Removed: `install.ps1`, `uninstall-runtime.ps1`,
+  `點擊兩下-僅安裝Runtime.cmd`, Start Menu / Desktop shortcuts.
+- `setup.ps1` is now a thin wrapper around `setup-devpack.ps1` (only the
+  dev pack gets installed). Both `setup.ps1` and `uninstall.ps1` will
+  best-effort clean up the legacy `%ProgramFiles%\PlaywrightApp` folder
+  if it exists (for users upgrading from v0.5.x).
+
+### Added
+- **Three reference sample projects** bundled under `samples/`:
+  - `samples/hello-nunit/`  — NUnit + `Microsoft.Playwright.NUnit` test
+  - `samples/hello-mstest/` — MSTest + `Microsoft.Playwright.MSTest` test
+  - `samples/hello-console/` — pure console + `Microsoft.Playwright`
+  Each is fully wired for offline use: project-local `NuGet.config`
+  (`<clear />` + offline feed), `.csproj` with PackageReferences pinned to
+  the bundled versions, ready-to-run source, `.runsettings` (for tests)
+  pointing Playwright at Edge channel, and a short `README.md`.
+- The CI `verify-offline` job now proves offline readiness by running
+  `dotnet restore` + `dotnet build` against `samples/hello-console` with
+  all outbound traffic firewalled.
+
+### Changed
+- `src/PlaywrightSampleApp/` is retained in the repo (so the codebase
+  still builds end-to-end) but the packager no longer publishes or
+  bundles it.
+- ZIP filename format unchanged: `PlaywrightOffline-vX.Y.Z-win-x64-<ts>.zip`.
+
+### Migration from v0.5.x
+1. Unzip the new release.
+2. Double-click `點擊兩下-完整安裝(推薦).cmd` — it will clean up the old
+   `%ProgramFiles%\PlaywrightApp` and install the v0.6 dev pack.
+3. Use the new `samples/` projects (or `new-playwright-project.ps1`) as
+   your starting point.
+
 ## [0.5.3] - 2026-05-28
 
 ### Fixed

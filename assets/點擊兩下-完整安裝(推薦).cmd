@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-REM Double-clickable launcher for setup.ps1 (combined runtime + dev pack).
+REM Double-clickable launcher for setup.ps1 (offline dev pack installer; v0.6+).
 setlocal
 set "SCRIPT_DIR=%~dp0"
 echo Launching Playwright Offline combined setup...

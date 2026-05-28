@@ -10,7 +10,7 @@
 
 | 項目 | 版本 |
 | --- | --- |
-| ferry-playwright | **v0.5.3**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| ferry-playwright | **v0.6.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
 | Microsoft.Playwright (.NET) | **1.60.0** |
 | .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
 | 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
@@ -30,7 +30,7 @@
 - 你不想讓 Playwright 在每台機器上下載 ~500MB 的 Chromium / Firefox。
 - 你要把 .NET 應用 + Playwright 環境用「一個 ZIP + 一鍵安裝」交付給客戶 / IT。
 
-把產生的 ZIP 用 USB 拷貝過去 → 解壓 → 右鍵 install.ps1 → 結束。不需要 internet、不需要 .NET SDK、不需要安裝 Edge（系統已內建）。
+把產生的 ZIP 用 USB 拷貝過去 → 解壓 → 雙擊 `點擊兩下-完整安裝(推薦).cmd` → 結束。不需要 internet、不需要 .NET SDK、不需要安裝 Edge（系統已內建）。
 
 ---
 
@@ -48,60 +48,57 @@
 
 ## 給「拿到 ZIP」的人：怎麼安裝
 
-> 從 v0.5.0 起，**每個 release 只附一個 ZIP**：
-> `PlaywrightOffline-win-x64-*.zip`，內含 runtime（執行範例程式）+ dev pack
-> （離線 NuGet feed，可在這台機器 `dotnet add package Microsoft.Playwright`）。
-> 一鍵雙擊一次裝完，也可以只裝其中一邊。
+> 從 **v0.6.0** 起，ZIP 內容改為「離線 NuGet feed + 三個 sample 原始碼專案」，
+> **不再包含** 預編譯的 `PlaywrightSampleApp.exe`。如果你想看一個完整的
+> Playwright + Edge 範例，請直接看解壓後的 `samples/hello-nunit`、
+> `samples/hello-mstest` 或 `samples/hello-console`。
 
-### 一鍵安裝（推薦：runtime + dev pack）
+### 一鍵安裝（dev pack）
 
-1. 把 `PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
+1. 把 `PlaywrightOffline-vX.Y.Z-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
 2. 進入解壓後的資料夾，**雙擊** `點擊兩下-完整安裝(推薦).cmd`。
 3. 接受 UAC 提權對話框（只會問一次）。
-4. 等畫面跳出「All done. Runtime + dev pack are installed.」即完成。
+4. 看到「Dev pack installed.」即完成。
 
-腳本會依序：
+腳本會：
 
-- **[1/2] runtime**：確認 Edge → 複製到 `C:\Program Files\PlaywrightApp\` → 設機器層
-  `PLAYWRIGHT_*` 環境變數 → 建立桌面 / 開始功能表捷徑。
-- **[2/2] dev pack**：把 26 個 .nupkg 複製到 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`
-  （Microsoft 標準離線 feed 位置）→ 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條
-  `PlaywrightOfflineFeed` 來源（舊檔備份為 `.bak.YYYYMMDD-HHMMSS`）。
+- 把所有 `.nupkg` 複製到 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`
+  （Microsoft 標準離線 feed 位置）
+- 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條 `PlaywrightOfflineFeed` 來源
+  （舊檔備份為 `.bak.YYYYMMDD-HHMMSS`），預設停用 `nuget.org`（嚴格離線）
+- 設機器層環境變數 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` /
+  `PLAYWRIGHT_BROWSERS_PATH=0`，讓 Playwright 永遠不嘗試下載 Chromium
+- 若偵測到 v0.5.x 留下的 `C:\Program Files\PlaywrightApp\`，順手清掉
 
-> 進階：傳參數時可改用 `setup.ps1`，例如
-> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -SkipEdgeCheck`。
->
-> **嚴格離線（預設）**：`setup-devpack.ps1` 預設會把 `nuget.org` 加入
-> `disabledPackageSources`，這樣 `dotnet add package <id>`（沒指定版本時）
-> 不會嘗試上 `api.nuget.org` 查 latest version。若這台機器**偶爾**有網路通道、
-> 想保留 nuget.org 作為 fallback，可加 `-KeepNuGetOrg`：
-> `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -KeepNuGetOrg`。
-
-### 只想裝其中一邊
-
-- **只裝 runtime**：雙擊 `點擊兩下-僅安裝Runtime.cmd`（呼叫 `install.ps1`）。
-- **只裝 dev pack**：系統管理員 PowerShell 執行
-  `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1`。
-
-### 安裝完怎麼執行 runtime
-
-打開**新的** PowerShell / Command Prompt（要重新讀環境變數），執行：
+### 跑範例
 
 ```powershell
-& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe"
+# 把 hello-nunit 複製到自己的工作目錄
+Copy-Item -Recurse .\samples\hello-nunit C:\Work\
+cd C:\Work\hello-nunit
+dotnet test --settings .runsettings
 ```
 
-或直接點桌面 / 開始功能表的「PlaywrightApp」捷徑。
+> 進階：`setup.ps1 -KeepNuGetOrg` 可在保留 nuget.org 作為 fallback 的情況下安裝
+> （適合有間歇性網路的機器）。
 
-執行後 Edge 會彈出一個 **「Hello, Playwright!」** 內嵌頁面，
-終端會印出三項斷言並以 `RESULT: PASS` 結尾 — 看到 PASS 就代表離線環境完全可用。
-按 Enter 即可關閉瀏覽器。
+### 跑範例（runtime 部分）
 
-> 想自己指定網址？在後面加 URL：
-> `& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" https://example.com`
+> v0.6.0 起 ZIP 不再附 `PlaywrightSampleApp.exe`。要看一個「會跑起來的範例」，
+> 請直接用 `samples/hello-console`：
 
-> 純自我測試 (Headless、不等 Enter、直接 PASS/FAIL 退出)：
-> `& "C:\Program Files\PlaywrightApp\PlaywrightSampleApp.exe" --ci`
+```powershell
+Copy-Item -Recurse .\samples\hello-console C:\Work\
+cd C:\Work\hello-console
+dotnet run            # 互動：開啟 Edge、按 ENTER 結束
+dotnet run -- --ci    # CI：headless，跑完直接結束
+```
+
+`samples/hello-nunit` / `samples/hello-mstest` 則用：
+
+```powershell
+dotnet test --settings .runsettings
+```
 
 ### 安裝完怎麼用 dev pack 寫自己的測試
 
@@ -113,29 +110,25 @@ dotnet new nunit
 dotnet add package Microsoft.Playwright.NUnit
 ```
 
-詳見下方
-「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
+或直接用 ZIP 內附的 helper：
+
+```powershell
+& ".\new-playwright-project.ps1" -Name MyTests -Template nunit
+```
 
 ### 升級到新版本
 
 直接執行新版 ZIP 內的 `點擊兩下-完整安裝(推薦).cmd` 即可，**不需要**先解除安裝。腳本會自動：
 
-- 比對 `C:\Program Files\PlaywrightApp\VERSION.txt` 與新 ZIP 內的 `VERSION.txt`，
-  在畫面印出 `Upgrading PlaywrightApp: vOLD -> vNEW`（同版號則顯示 Reinstalling，
-  降版則顯示警告但仍會繼續）。
-- 直接覆蓋 runtime 內容（停掉執行中的 `PlaywrightSampleApp.exe` → 清空安裝資料夾 → 拷新檔）。
 - dev pack 部分會讀取上次留下的 sentinel `PlaywrightOfflineFeed.INDEX.txt`，**只刪掉同 package id
   但不同版本的舊 .nupkg**，再放入新版；其他 Microsoft offline 套件（VS Installer 留下的）一律不動。
-
-降版警告但不擋安裝，是為了讓你能用「下載到的任一版本」當作 hotfix 直接覆蓋。
+- 若偵測到舊版（v0.5.x）的 `C:\Program Files\PlaywrightApp\`，會順手清掉。
 
 ### 解除安裝
 
-在同一個解壓資料夾，**雙擊** `點擊兩下-解除安裝.cmd`。腳本會：
-
-- **[1/2] dev pack**：從機器層 NuGet.Config 移除來源、依 INDEX.txt 刪掉我們塞進去的
-  .nupkg（不會誤刪其他 Microsoft 既有的 offline 套件）。
-- **[2/2] runtime**：移除 `C:\Program Files\PlaywrightApp`、清環境變數、刪捷徑。
+在同一個解壓資料夾，**雙擊** `點擊兩下-解除安裝.cmd`。腳本會從機器層 NuGet.Config 移除來源、
+依 INDEX.txt 刪掉我們塞進去的 .nupkg（不會誤刪其他 Microsoft 既有的 offline 套件），並一併
+清掉 v0.5.x 留下的 `C:\Program Files\PlaywrightApp` 目錄與捷徑（若存在）。
 
 ---
 
@@ -149,8 +142,8 @@ cd ferry-playwright
 dotnet run --project src/PlaywrightOfflinePackager
 ```
 
-ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`（runtime + dev pack 都在裡面，
-~350 MB），把它拷給目標機就好。
+ZIP 會出現在 `output/PlaywrightOffline-vX.Y.Z-win-x64-*.zip`（dev pack + 三個 sample 原始碼，
+約 280 MB；其中 Microsoft.Playwright 套件本身就佔大宗），把它拷給目標機就好。
 
 > 進一步的打包選項、自訂應用、CI 自動發布、架構說明，請參考 **[DEVELOPER.md](DEVELOPER.md)**。
 

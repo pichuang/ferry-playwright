@@ -88,20 +88,26 @@ jobs:
           ZIP="${{ steps.locate.outputs.zip_path }}"
           for needle in \
               "setup.ps1" \
-              "install.ps1" \
               "setup-devpack.ps1" \
               "uninstall.ps1" \
-              "uninstall-runtime.ps1" \
               "uninstall-devpack.ps1" \
+              "new-playwright-project.ps1" \
+              "NuGet.config.template" \
               "README.txt" \
               "BUILD-INFO.txt" \
               "VERSION.txt" \
-              "app/.playwright/node/win32_x64/node.exe" \
-              "app/PlaywrightSampleApp.exe" \
+              "samples/hello-nunit/hello-nunit.csproj" \
+              "samples/hello-mstest/hello-mstest.csproj" \
+              "samples/hello-console/hello-console.csproj" \
+              "samples/hello-nunit/NuGet.config" \
+              "samples/hello-console/Program.cs" \
               "nuget/INDEX.txt" \
               "nuget/microsoft.playwright.1.60.0.nupkg" \
               "nuget/microsoft.playwright.nunit.1.60.0.nupkg" \
-              "nuget/microsoft.playwright.mstest.1.60.0.nupkg"; do
+              "nuget/microsoft.playwright.mstest.1.60.0.nupkg" \
+              "nuget/coverlet.collector.6.0.2.nupkg" \
+              "nuget/nunit.analyzers.4.4.0.nupkg" \
+              "nuget/mstest.analyzers.3.6.4.nupkg"; do
             if unzip -l "$ZIP" | grep -qE "[[:space:]]${needle//./\\.}\$"; then
               echo "  ✓ $needle"
             else
@@ -135,20 +141,20 @@ jobs:
             echo "| \`${ZIP_NAME}\` | ${SIZE_MB} MB | \`${SHA}\` |"
             echo ""
             echo "Single combined ZIP containing:"
-            echo "- **Runtime** (\`app/\`) — self-contained .NET app + Playwright driver"
-            echo "- **Dev pack** (\`nuget/\`) — offline NuGet feed with Microsoft.Playwright + NUnit + MSTest packages"
-            echo "- Double-click \`點擊兩下-完整安裝(推薦).cmd\` to install both in one shot. Individual installers"
-            echo "  (\`install.ps1\` for runtime only, \`setup-devpack.ps1\` for dev pack only) are still available."
+            echo "- **Dev pack** (\`nuget/\`) — offline NuGet feed with Microsoft.Playwright + NUnit + MSTest packages + coverlet/analyzers"
+            echo "- **Sample projects** (\`samples/hello-nunit\`, \`hello-mstest\`, \`hello-console\`) — reference source code for offline Playwright projects"
+            echo "- Double-click \`點擊兩下-完整安裝(推薦).cmd\` to install the dev pack."
+            echo "  Then copy one of \`samples/\` to your working directory and run \`dotnet test --settings .runsettings\` (or \`dotnet run\`)."
+            echo ""
+            echo "**Breaking change vs v0.5.x**: ZIP no longer contains a precompiled \`PlaywrightSampleApp.exe\`. Sample projects replace it as the reference. \`install.ps1\` / \`uninstall-runtime.ps1\` / the \`點擊兩下-僅安裝Runtime.cmd\` launcher are removed."
             echo ""
             echo "## Self-test results"
             echo ""
             echo "This release is built only after the \`verify-offline\` job has:"
-            echo "- Installed the runtime portion on a clean Windows Server 2022 runner"
+            echo "- Installed the dev pack on a clean Windows Server 2022 runner"
             echo "- Blocked **all** outbound network traffic via Windows Defender Firewall"
-            echo "- Successfully launched the sample application against \`about:blank\` headlessly"
+            echo "- Successfully run \`dotnet build\` against \`samples/hello-console\` 100% offline (proving the bundled NuGet feed resolves everything without internet)"
             echo "- Audited TCP connections and confirmed **no external network activity**"
-            echo ""
-            echo "(The dev pack portion is not automatically tested — it makes machine-level NuGet config changes that would be invasive in CI.)"
             echo ""
             echo "## Changes"
             echo ""
@@ -192,6 +198,22 @@ jobs:
     runs-on: windows-2022
     needs: package
     steps:
+      - name: Checkout (for global.json)
+        uses: actions/checkout@v4
+
+      - name: Setup .NET (from global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          dotnet-quality: preview
+
+      - name: dotnet --info (pre-warm SDK)
+        shell: pwsh
+        run: |
+          dotnet --info
+          # Pre-warm NuGet to ensure SDK is fully extracted before firewall block.
+          dotnet new --list | Out-Null
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -238,16 +260,17 @@ jobs:
           }
           Write-Host '✓ Confirmed offline: external host unreachable.'
 
-      - name: Run install.ps1
+      - name: Run setup.ps1 (installs dev pack)
         shell: pwsh
         working-directory: extracted
         run: |
-          Write-Host 'Running install.ps1 (runner is already admin)...'
-          ./install.ps1
-          if (-not (Test-Path "$Env:ProgramFiles\PlaywrightApp\PlaywrightSampleApp.exe")) {
-            throw 'install.ps1 ran but PlaywrightSampleApp.exe is missing from install dir.'
+          Write-Host 'Running setup.ps1 (runner is already admin)...'
+          ./setup.ps1
+          $feed = Join-Path ${Env:ProgramFiles(x86)} 'Microsoft SDKs\NuGetPackages'
+          if (-not (Test-Path (Join-Path $feed 'microsoft.playwright.1.60.0.nupkg'))) {
+            throw "setup.ps1 ran but Microsoft.Playwright.1.60.0.nupkg is missing from $feed"
           }
-          Write-Host '✓ Installation completed.'
+          Write-Host '✓ Dev pack installation completed.'
 
       - name: Verify environment variables set
         shell: pwsh
@@ -266,21 +289,37 @@ jobs:
           $before | ConvertTo-Json -Depth 3 | Out-File -FilePath tcp-before.json -Encoding utf8
           Write-Host "Captured $($before.Count) TCP connections before run."
 
-      - name: Run application in CI mode (headless, offline)
+      - name: Build sample project (proves offline NuGet restore works)
         shell: pwsh
         env:
-          CI: 'true'
-          PLAYWRIGHT_CI: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           PLAYWRIGHT_BROWSERS_PATH: '0'
         run: |
-          $exe = "$Env:ProgramFiles\PlaywrightApp\PlaywrightSampleApp.exe"
-          Write-Host "Running: $exe --ci"
-          & $exe --ci
-          if ($LASTEXITCODE -ne 0) {
-            throw "Application exited with code $LASTEXITCODE — offline smoke test failed."
+          # Copy sample out of the extracted ZIP so we can build without
+          # touching the original tree.
+          $src = Join-Path (Resolve-Path 'extracted') 'samples\hello-console'
+          if (-not (Test-Path $src)) { throw "Sample not found at $src" }
+          $dst = Join-Path (Get-Location) 'work-sample\hello-console'
+          New-Item -ItemType Directory -Path $dst -Force | Out-Null
+          Copy-Item -Path (Join-Path $src '*') -Destination $dst -Recurse -Force
+
+          Push-Location $dst
+          try {
+            Write-Host '--- NuGet.config (proves clear + offline feed) ---'
+            Get-Content NuGet.config
+            Write-Host '----------------------------------------------------'
+
+            Write-Host 'Running: dotnet restore (offline)'
+            & dotnet restore --verbosity minimal
+            if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with code $LASTEXITCODE — offline NuGet feed didn't satisfy the graph." }
+
+            Write-Host 'Running: dotnet build -c Release --no-restore'
+            & dotnet build -c Release --no-restore --verbosity minimal
+            if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with code $LASTEXITCODE while offline." }
           }
-          Write-Host '✓ Application ran successfully while offline.'
+          finally { Pop-Location }
+
+          Write-Host '✓ Sample project restored + built 100% offline.'
 
       - name: Audit TCP connections after run (detect any external traffic from our app)
         shell: pwsh
