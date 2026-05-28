@@ -76,6 +76,46 @@ Write-Host (" FeedDir    : {0}" -f $FeedDir)
 Write-Host (" SourceName : {0}" -f $SourceName)
 Write-Host (" Packages   : {0} .nupkg file(s)" -f $nupkgFiles.Count)
 
+# Helper: parse "<id>.<version>.nupkg" into (id, version). Versions can contain dots and dashes.
+function Get-NupkgIdVersion {
+    param([string]$fileName)
+    $base = [IO.Path]::GetFileNameWithoutExtension($fileName)
+    # First chunk starting with a digit is the version.
+    if ($base -match '^(?<id>.+?)\.(?<ver>\d[\w\.\-\+]*)$') {
+        return [pscustomobject]@{ Id = $matches['id'].ToLowerInvariant(); Version = $matches['ver']; FileName = $fileName }
+    }
+    return $null
+}
+
+# Step 0 — clean up older versions of bundled package ids using sentinel left by previous install.
+$sentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$sentinelPath = Join-Path $FeedDir $sentinelName
+
+$newNupkgInfo = @($nupkgFiles | ForEach-Object { Get-NupkgIdVersion $_.Name } | Where-Object { $_ })
+$newIds = @{}
+foreach ($info in $newNupkgInfo) { $newIds[$info.Id] = $info }
+$newFileNames = @{}
+foreach ($info in $newNupkgInfo) { $newFileNames[$info.FileName] = $true }
+
+if (Test-Path $sentinelPath) {
+    Write-Section 'Cleaning obsolete dev pack packages from previous install'
+    $previous = @(Get-Content $sentinelPath | Where-Object { $_ -and -not $_.StartsWith('#') })
+    $removed = 0
+    foreach ($prevFile in $previous) {
+        if ($newFileNames.ContainsKey($prevFile)) { continue }  # same file in new bundle — keep
+        $prevInfo = Get-NupkgIdVersion $prevFile
+        if ($null -eq $prevInfo) { continue }
+        if (-not $newIds.ContainsKey($prevInfo.Id)) { continue } # id not in new bundle — leave it alone
+        $oldPath = Join-Path $FeedDir $prevFile
+        if (Test-Path $oldPath) {
+            Remove-Item -Path $oldPath -Force
+            Write-Host (" - {0}" -f $prevFile)
+            $removed++
+        }
+    }
+    if ($removed -eq 0) { Write-Host ' Nothing to remove.' }
+}
+
 # Step 1 — copy nupkgs to machine-wide feed
 Write-Section 'Copying packages to machine-wide offline feed'
 New-Item -ItemType Directory -Path $FeedDir -Force | Out-Null
@@ -143,6 +183,18 @@ Write-Section 'Setting Playwright environment variables (machine scope)'
 [Environment]::SetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH',         '0', 'Machine')
 Write-Host ' PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = 1'
 Write-Host ' PLAYWRIGHT_BROWSERS_PATH         = 0'
+
+# Step 4 — write/refresh sentinel so the next upgrade knows what we deployed
+$pkgVersionFile = Join-Path $scriptDir 'VERSION.txt'
+$pkgVersion = if (Test-Path $pkgVersionFile) { (Get-Content $pkgVersionFile -Raw).Trim() } else { 'unknown' }
+$sb = New-Object System.Text.StringBuilder
+[void]$sb.AppendLine('# PlaywrightOfflineFeed sentinel — files written by setup-devpack.ps1')
+[void]$sb.AppendLine('# Do NOT edit by hand. Used by uninstall-devpack.ps1 and upgrade cleanup.')
+[void]$sb.AppendLine("# PackageVersion: $pkgVersion")
+[void]$sb.AppendLine("# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')")
+foreach ($f in $nupkgFiles) { [void]$sb.AppendLine($f.Name) }
+Set-Content -Path $sentinelPath -Value $sb.ToString() -Encoding UTF8
+Write-Host (" Sentinel   : {0}" -f $sentinelPath)
 
 Write-Section 'Dev pack installed'
 Write-Host ' You can now write Playwright tests on this offline machine. Try:' -ForegroundColor Green

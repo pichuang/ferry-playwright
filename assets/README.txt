@@ -157,4 +157,12 @@
 
 重新安裝 / 升級
 ---------------
-  直接再執行一次「點擊兩下-setup.cmd」即可（idempotent，會覆蓋舊版）。
+  直接再執行一次「點擊兩下-setup.cmd」即可，**不需要**先解除安裝。
+
+  - 安裝畫面會顯示「Upgrading PlaywrightApp: vOLD -> vNEW」之類訊息，
+    來源是 C:\Program Files\PlaywrightApp\VERSION.txt 與 ZIP 內 VERSION.txt 的比對。
+  - runtime：停掉執行中的 PlaywrightSampleApp.exe → 清空安裝資料夾 → 拷新檔。
+  - dev pack：讀取上次留下的 sentinel（PlaywrightOfflineFeed.INDEX.txt），
+    只刪掉「同 package id 但不同版本」的舊 .nupkg；其他 Microsoft offline
+    套件一律不動。
+  - 降版（vNEW 較舊）會印警告但仍會繼續，方便你用任一版本當 hotfix。

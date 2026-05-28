@@ -16,6 +16,7 @@ string outputDir = "output";
 string sampleProject = "src/PlaywrightSampleApp/PlaywrightSampleApp.csproj";
 string assetsDir = "assets";
 string assetsDevpackDir = "assets-devpack";
+string? versionOverride = null;
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -27,6 +28,7 @@ for (var i = 0; i < args.Length; i++)
         case "--project": sampleProject = args[++i]; break;
         case "--assets": assetsDir = args[++i]; break;
         case "--assets-devpack": assetsDevpackDir = args[++i]; break;
+        case "--version": versionOverride = args[++i]; break;
         case "-h":
         case "--help":
             PrintHelp();
@@ -62,6 +64,8 @@ if (!Directory.Exists(assetsDevpackDir))
 
 Directory.CreateDirectory(outputDir);
 
+string packageVersion = ResolvePackageVersion(repoRoot, versionOverride);
+
 string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 string stagingRoot = Path.Combine(Path.GetTempPath(), $"playwright-offline-{timestamp}");
 string appStaging = Path.Combine(stagingRoot, "app");
@@ -75,6 +79,7 @@ Console.WriteLine("=============================================================
 Console.WriteLine(" Playwright Offline Packager (runtime + dev pack, single ZIP)");
 Console.WriteLine("================================================================");
 Console.WriteLine($" RID            : {rid}");
+Console.WriteLine($" Version        : {packageVersion}");
 Console.WriteLine($" Config         : {config}");
 Console.WriteLine($" Project        : {sampleProject}");
 Console.WriteLine($" Assets         : {assetsDir}");
@@ -172,6 +177,7 @@ try
         var index = new StringBuilder();
         index.AppendLine("# Playwright Offline Dev Pack — bundled .nupkg files");
         index.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        index.AppendLine($"# PackageVersion: {packageVersion}");
         index.AppendLine($"# Count: {collected.Count}");
         foreach (var n in collected) index.AppendLine(n);
         File.WriteAllText(Path.Combine(nugetStaging, "INDEX.txt"), index.ToString());
@@ -190,6 +196,7 @@ try
         var meta = $"""
             Playwright Offline Package (runtime + dev pack)
             ================================================
+            Version     : {packageVersion}
             Built on    : {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}
             RID         : {rid}
             Configuration: {config}
@@ -197,10 +204,11 @@ try
             Contents    : app/ (runtime), nuget/ (offline NuGet feed)
             """;
         File.WriteAllText(Path.Combine(stagingRoot, "BUILD-INFO.txt"), meta);
+        File.WriteAllText(Path.Combine(stagingRoot, "VERSION.txt"), packageVersion + Environment.NewLine);
     });
 
     // STEP 9: zip
-    string zipName = $"PlaywrightOffline-{rid}-{timestamp}.zip";
+    string zipName = $"PlaywrightOffline-v{packageVersion}-{rid}-{timestamp}.zip";
     string zipPath = Path.Combine(outputDir, zipName);
     Step("Create ZIP", () =>
     {
@@ -319,6 +327,52 @@ static string FormatBytes(long bytes)
     return $"{size:F2} {units[u]}";
 }
 
+static string ResolvePackageVersion(string repoRoot, string? overrideVersion)
+{
+    static string Sanitize(string s)
+    {
+        s = s.Trim();
+        if (s.StartsWith("v", StringComparison.OrdinalIgnoreCase)) s = s.Substring(1);
+        return s;
+    }
+
+    if (!string.IsNullOrWhiteSpace(overrideVersion))
+        return Sanitize(overrideVersion);
+
+    var env = Environment.GetEnvironmentVariable("PACKAGE_VERSION");
+    if (!string.IsNullOrWhiteSpace(env))
+        return Sanitize(env);
+
+    try
+    {
+        var psi = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repoRoot,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.ArgumentList.Add("describe");
+        psi.ArgumentList.Add("--tags");
+        psi.ArgumentList.Add("--always");
+        psi.ArgumentList.Add("--dirty");
+        using var p = Process.Start(psi);
+        if (p is not null)
+        {
+            var output = p.StandardOutput.ReadToEnd().Trim();
+            p.WaitForExit();
+            if (p.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                return Sanitize(output);
+        }
+    }
+    catch
+    {
+        // git not available — fall through
+    }
+
+    return "0.0.0-dev";
+}
+
 static void PrintHelp()
 {
     Console.WriteLine("Usage: dotnet run --project src/PlaywrightOfflinePackager -- [options]");
@@ -331,6 +385,8 @@ static void PrintHelp()
     Console.WriteLine("                          (default: src/PlaywrightSampleApp/PlaywrightSampleApp.csproj)");
     Console.WriteLine("  --assets <dir>          Runtime assets folder (default: assets)");
     Console.WriteLine("  --assets-devpack <dir>  Dev pack assets folder (default: assets-devpack)");
+    Console.WriteLine("  --version <semver>      Package version stamped into VERSION.txt / BUILD-INFO.txt");
+    Console.WriteLine("                          (default: $PACKAGE_VERSION env > git describe > 0.0.0-dev)");
     Console.WriteLine("  -h, --help              Show this help");
     Console.WriteLine();
     Console.WriteLine("Produces a single ZIP combining runtime + offline NuGet dev pack.");

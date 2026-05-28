@@ -44,6 +44,8 @@ if (-not (Test-IsAdmin)) { Invoke-SelfElevate }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $indexFile = Join-Path $scriptDir 'nuget\INDEX.txt'
+$sentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$sentinelPath = Join-Path $FeedDir $sentinelName
 
 # Step 1 — unregister NuGet source
 $nugetConfig = Join-Path $env:ProgramData 'NuGet\NuGet.Config'
@@ -65,13 +67,28 @@ if (Test-Path $nugetConfig) {
     Write-Host " NuGet.Config not found at $nugetConfig — nothing to unregister."
 }
 
-# Step 2 — remove the .nupkg files we copied (use INDEX.txt to know which)
+# Step 2 — remove .nupkg files we deployed. Prefer the FeedDir sentinel (covers files
+# accumulated across upgrades); fall back to bundled INDEX.txt for compatibility.
 Write-Section 'Removing bundled .nupkg files from feed'
-if (Test-Path $indexFile) {
+$listSource = $null
+$lines = $null
+if (Test-Path $sentinelPath) {
+    $listSource = $sentinelPath
+    $lines = Get-Content $sentinelPath
+    Write-Host " Using sentinel: $sentinelPath"
+} elseif (Test-Path $indexFile) {
+    $listSource = $indexFile
+    $lines = Get-Content $indexFile
+    Write-Host " Sentinel not found; falling back to bundled INDEX.txt: $indexFile"
+} else {
+    Write-Warning "Neither sentinel ($sentinelPath) nor bundled INDEX.txt ($indexFile) found. Skipping nupkg removal."
+}
+
+if ($lines) {
     $removed = 0
-    Get-Content $indexFile | ForEach-Object {
-        $line = $_.Trim()
-        if (-not $line -or $line.StartsWith('#')) { return }
+    foreach ($raw in $lines) {
+        $line = $raw.Trim()
+        if (-not $line -or $line.StartsWith('#')) { continue }
         $candidate = Join-Path $FeedDir $line
         if (Test-Path $candidate) {
             Remove-Item -Path $candidate -Force
@@ -80,8 +97,11 @@ if (Test-Path $indexFile) {
         }
     }
     Write-Host (" Removed {0} package file(s) from {1}" -f $removed, $FeedDir)
-} else {
-    Write-Warning "INDEX.txt not found alongside this script ($indexFile). Skipping nupkg removal."
+
+    if (Test-Path $sentinelPath) {
+        Remove-Item -Path $sentinelPath -Force
+        Write-Host " - $sentinelName (sentinel)"
+    }
 }
 
 Write-Section 'Dev pack uninstalled'

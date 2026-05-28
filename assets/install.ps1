@@ -33,6 +33,30 @@ function Test-IsAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Compare-SemVer {
+    param([string]$a, [string]$b)
+    # Returns -1 if a<b, 0 if equal, 1 if a>b. Lenient: ignores build metadata, falls back to string compare on parse failure.
+    function Get-Parts($v) {
+        if (-not $v) { return $null }
+        $core = ($v -split '[-+]', 2)[0]
+        $parts = $core -split '\.'
+        $nums = New-Object int[] 3
+        for ($i = 0; $i -lt 3; $i++) {
+            $n = 0
+            if ($i -lt $parts.Length -and [int]::TryParse($parts[$i], [ref]$n)) { $nums[$i] = $n }
+        }
+        return $nums
+    }
+    $pa = Get-Parts $a
+    $pb = Get-Parts $b
+    if ($null -eq $pa -or $null -eq $pb) { return [string]::Compare($a, $b) }
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($pa[$i] -lt $pb[$i]) { return -1 }
+        if ($pa[$i] -gt $pb[$i]) { return 1 }
+    }
+    return 0
+}
+
 function Invoke-SelfElevate {
     Write-Host 'This installer requires Administrator privileges. Relaunching elevated...' -ForegroundColor Yellow
     $scriptPath = $MyInvocation.PSCommandPath
@@ -100,6 +124,29 @@ if (-not (Test-Path $payload)) {
 Write-Host " Payload    : $payload"
 Write-Host " InstallDir : $InstallDir"
 
+# Read version info — new version from ZIP root, old from prior install
+$newVersionFile = Join-Path $scriptDir 'VERSION.txt'
+$newVersion = if (Test-Path $newVersionFile) { (Get-Content $newVersionFile -Raw).Trim() } else { 'unknown' }
+
+$oldVersionFile = Join-Path $InstallDir 'VERSION.txt'
+$oldVersion = if (Test-Path $oldVersionFile) { (Get-Content $oldVersionFile -Raw).Trim() } else { $null }
+
+Write-Section 'Version'
+if ($null -eq $oldVersion) {
+    Write-Host (" Installing PlaywrightApp v{0} (fresh install)" -f $newVersion) -ForegroundColor Green
+} elseif ($oldVersion -eq $newVersion) {
+    Write-Host (" Reinstalling PlaywrightApp v{0}" -f $newVersion) -ForegroundColor Yellow
+} else {
+    $cmp = Compare-SemVer $oldVersion $newVersion
+    if ($cmp -lt 0) {
+        Write-Host (" Upgrading PlaywrightApp: v{0} -> v{1}" -f $oldVersion, $newVersion) -ForegroundColor Green
+    } elseif ($cmp -gt 0) {
+        Write-Warning (" Downgrade detected: v{0} -> v{1}. Proceeding anyway." -f $oldVersion, $newVersion)
+    } else {
+        Write-Host (" Replacing PlaywrightApp v{0} -> v{1}" -f $oldVersion, $newVersion) -ForegroundColor Yellow
+    }
+}
+
 # Stop running instance if any
 $exeName = 'PlaywrightSampleApp.exe'
 Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($exeName)) -ErrorAction SilentlyContinue |
@@ -116,6 +163,9 @@ if (Test-Path $InstallDir) {
 }
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 Copy-Item -Path (Join-Path $payload '*') -Destination $InstallDir -Recurse -Force
+if (Test-Path $newVersionFile) {
+    Copy-Item -Path $newVersionFile -Destination (Join-Path $InstallDir 'VERSION.txt') -Force
+}
 Write-Host ' Done.'
 
 # Environment variables (machine scope)

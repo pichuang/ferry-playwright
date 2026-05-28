@@ -110,6 +110,19 @@ dotnet add package Microsoft.Playwright.NUnit
 詳見下方
 「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
 
+### 升級到新版本
+
+直接執行新版 ZIP 內的 `點擊兩下-setup.cmd` 即可，**不需要**先解除安裝。腳本會自動：
+
+- 比對 `C:\Program Files\PlaywrightApp\VERSION.txt` 與新 ZIP 內的 `VERSION.txt`，
+  在畫面印出 `Upgrading PlaywrightApp: vOLD -> vNEW`（同版號則顯示 Reinstalling，
+  降版則顯示警告但仍會繼續）。
+- 直接覆蓋 runtime 內容（停掉執行中的 `PlaywrightSampleApp.exe` → 清空安裝資料夾 → 拷新檔）。
+- dev pack 部分會讀取上次留下的 sentinel `PlaywrightOfflineFeed.INDEX.txt`，**只刪掉同 package id
+  但不同版本的舊 .nupkg**，再放入新版；其他 Microsoft offline 套件（VS Installer 留下的）一律不動。
+
+降版警告但不擋安裝，是為了讓你能用「下載到的任一版本」當作 hotfix 直接覆蓋。
+
 ### 解除安裝
 
 在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`。腳本會：

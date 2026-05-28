@@ -57,6 +57,8 @@ jobs:
           echo "Version: $VERSION"
 
       - name: Run packager
+        env:
+          PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
         run: dotnet run --project src/PlaywrightOfflinePackager -c Release
 
       - name: Locate ZIP and compute SHA256
@@ -93,6 +95,7 @@ jobs:
               "uninstall-devpack.ps1" \
               "README.txt" \
               "BUILD-INFO.txt" \
+              "VERSION.txt" \
               "app/.playwright/node/win32_x64/node.exe" \
               "app/PlaywrightSampleApp.exe" \
               "nuget/INDEX.txt" \

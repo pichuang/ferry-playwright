@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Seamless upgrade**: running `點擊兩下-setup.cmd` from a newer ZIP now
+  smoothly upgrades an existing install without requiring an uninstall first.
+  - Each ZIP carries a top-level **`VERSION.txt`** (semver), and `install.ps1`
+    compares it to the version of the existing install to print
+    `Upgrading vOLD -> vNEW` / `Reinstalling` / `Downgrade warning` /
+    `Fresh install` banners.
+  - `setup-devpack.ps1` writes a sentinel
+    `<FeedDir>\PlaywrightOfflineFeed.INDEX.txt` listing every `.nupkg` it
+    deployed. On the next install, packages whose id is in the new bundle but
+    whose version differs are removed before the new files are copied — so
+    obsolete versions don't accumulate. Other Microsoft offline packages (e.g.
+    those left by Visual Studio Installer) are never touched.
+  - `uninstall-devpack.ps1` now prefers the FeedDir sentinel (which covers
+    everything accumulated across upgrades) and falls back to the bundled
+    `nuget/INDEX.txt` for compatibility.
+- Packager accepts `--version <semver>` (or `PACKAGE_VERSION` env var, or
+  `git describe --tags` fallback) and stamps it into `VERSION.txt`,
+  `BUILD-INFO.txt`, the dev pack `INDEX.txt` header, and the produced ZIP
+  filename (`PlaywrightOffline-v<ver>-<rid>-<timestamp>.zip`).
+- Release workflow passes `PACKAGE_VERSION` to the packager (from the git tag
+  on tag builds) so every release ZIP carries the matching version string.
+
 ### Changed
 - **BREAKING (packaging)**: collapsed the two release artifacts
   (`PlaywrightOffline-*.zip` runtime + `PlaywrightDevPack-*.zip` dev pack) into

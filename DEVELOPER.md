@@ -169,6 +169,11 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime + dev pack, ~350 MB)
 - **自我提權**：偵測非 Administrator 時用 `Start-Process -Verb RunAs` 重啟自己。
 - **Edge 檢查**：找 `Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
   或註冊機碼。可用 `-SkipEdgeCheck` 略過。
+- **版號比對 / 無縫升級**：install.ps1 會讀 `<InstallDir>\VERSION.txt`（既有安裝）
+  與 `<scriptDir>\VERSION.txt`（新 ZIP 帶來的），用 `Compare-SemVer` 印出
+  `Upgrading vOLD -> vNEW` / `Reinstalling vSAME` / `Downgrade warning` /
+  `Fresh install` banner。降版只警告不擋（讓使用者能用任一 ZIP 當 hotfix）。
+  之後 wipe-and-copy 完還會把新的 VERSION.txt 拷進 InstallDir，下次安裝才比得到。
 - **環境變數寫入 Machine scope**，而非 User scope，這樣任何使用者帳號都生效。
 - **shortcuts**：使用 `WScript.Shell` COM 物件建立 `.lnk`。
 - **錯誤處理**：`$ErrorActionPreference = 'Stop'`，遇到例外整個中止。
@@ -211,12 +216,40 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
 - **冪等設環境變數**：與 `install.ps1` 同樣寫
   `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0`（Machine
   scope），讓 dev pack 可單獨使用（直接執行 `setup-devpack.ps1`），不必先裝 runtime。
+- **無縫升級用的 sentinel**：每次 setup-devpack 跑完，會在 `<FeedDir>` 寫一份
+  `PlaywrightOfflineFeed.INDEX.txt` 列出本次部署的 nupkg 檔名（含 PackageVersion
+  與時間戳註解）。下次新版 setup-devpack 跑：
+  - 讀 sentinel 拿到「上次裝過的檔名集合」。
+  - 解析每個檔名 → `(id, version)`（regex `^(?<id>.+?)\.(?<ver>\d[\w\.\-\+]*)$`）。
+  - 對於 sentinel 中的舊檔，若新 bundle 也有同 id 但版本不同 → 刪掉 FeedDir 內的舊檔。
+  - 拷新檔、覆寫 sentinel。
+  - 結果：FeedDir 內**永遠只剩最新一組**我們的 nupkg；其他 Microsoft offline
+    套件（VS Installer 留的）一律不動，因為它們不在 sentinel 裡。
 - **uninstall-devpack.ps1 的限制**：
-  - 用 `nuget/INDEX.txt` 當 allow-list，**只**刪我們塞進去的 nupkg；不誤刪
-    `Microsoft SDKs\NuGetPackages` 內 VS Installer 既有的套件。
+  - 優先用 `<FeedDir>\PlaywrightOfflineFeed.INDEX.txt`（涵蓋升級累積的所有檔），
+    找不到才退回 bundled `nuget/INDEX.txt`。**只**刪這份清單裡的檔，不誤刪
+    VS Installer 既有的套件。完成後也會把 sentinel 一併刪掉。
   - 不清 `%USERPROFILE%\.nuget\packages`（其他專案可能在用已 restore 的版本）。
   - 不清 PLAYWRIGHT_* 環境變數（runtime 可能還在用）；那是 `uninstall-runtime.ps1`
     的工作。
+
+---
+
+## 版號（VERSION.txt）來源
+
+打包時 packager 依序嘗試以下來源，取第一個非空者，並去掉 leading `v`：
+
+1. `--version <semver>` 命令列旗標
+2. `PACKAGE_VERSION` 環境變數（CI 從 tag 帶入）
+3. `git describe --tags --always --dirty`（無 tag 時會退而給 short SHA）
+4. fallback：`0.0.0-dev`
+
+寫入位置：
+
+- ZIP 根目錄的 `VERSION.txt`（純文字一行）— 給 `install.ps1` 升級偵測讀。
+- `BUILD-INFO.txt` 內的 `Version: ...` 一行 — 給人讀。
+- `nuget/INDEX.txt` 標頭的 `# PackageVersion: ...` — 給人讀 / debug。
+- ZIP 檔名 `PlaywrightOffline-v<version>-<rid>-<timestamp>.zip` — 一眼可辨。
 
 ---
 
