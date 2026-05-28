@@ -11,6 +11,8 @@ string config = "Release";
 string outputDir = "output";
 string sampleProject = "src/PlaywrightSampleApp/PlaywrightSampleApp.csproj";
 string assetsDir = "assets";
+string assetsDevpackDir = "assets-devpack";
+bool buildDevpack = false;
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -21,6 +23,8 @@ for (var i = 0; i < args.Length; i++)
         case "--output": outputDir = args[++i]; break;
         case "--project": sampleProject = args[++i]; break;
         case "--assets": assetsDir = args[++i]; break;
+        case "--assets-devpack": assetsDevpackDir = args[++i]; break;
+        case "--devpack": buildDevpack = true; break;
         case "-h":
         case "--help":
             PrintHelp();
@@ -35,6 +39,7 @@ for (var i = 0; i < args.Length; i++)
 string repoRoot = ResolveRepoRoot();
 sampleProject = Path.GetFullPath(Path.Combine(repoRoot, sampleProject));
 assetsDir = Path.GetFullPath(Path.Combine(repoRoot, assetsDir));
+assetsDevpackDir = Path.GetFullPath(Path.Combine(repoRoot, assetsDevpackDir));
 outputDir = Path.GetFullPath(Path.Combine(repoRoot, outputDir));
 
 if (!File.Exists(sampleProject))
@@ -45,6 +50,11 @@ if (!File.Exists(sampleProject))
 if (!Directory.Exists(assetsDir))
 {
     Console.Error.WriteLine($"Assets folder not found: {assetsDir}");
+    return 1;
+}
+if (buildDevpack && !Directory.Exists(assetsDevpackDir))
+{
+    Console.Error.WriteLine($"Dev pack assets folder not found: {assetsDevpackDir}");
     return 1;
 }
 
@@ -125,11 +135,125 @@ try
         Console.WriteLine($"   ZIP size: {FormatBytes(size)}");
     });
 
+    // ---- DEV PACK (optional, --devpack) ----
+    string? devpackZipPath = null;
+    if (buildDevpack)
+    {
+        string devpackStaging = Path.Combine(Path.GetTempPath(), $"playwright-devpack-{timestamp}");
+        string devpackNugetDir = Path.Combine(devpackStaging, "nuget");
+        string devpackRestoreTmp = Path.Combine(Path.GetTempPath(), $"playwright-devpack-restore-{timestamp}");
+        Directory.CreateDirectory(devpackStaging);
+        Directory.CreateDirectory(devpackNugetDir);
+        Directory.CreateDirectory(devpackRestoreTmp);
+
+        try
+        {
+            // STEP D1: synthesize shell project and restore the full Playwright + test-framework graph
+            Step("Dev pack: restore shell project", () =>
+            {
+                string shellDir = Path.Combine(devpackRestoreTmp, "shell");
+                Directory.CreateDirectory(shellDir);
+                string shellCsproj = Path.Combine(shellDir, "shell.csproj");
+                File.WriteAllText(shellCsproj, """
+                    <Project Sdk="Microsoft.NET.Sdk">
+                      <PropertyGroup>
+                        <TargetFramework>net10.0</TargetFramework>
+                        <IsPackable>false</IsPackable>
+                        <Nullable>enable</Nullable>
+                      </PropertyGroup>
+                      <ItemGroup>
+                        <PackageReference Include="Microsoft.Playwright"        Version="1.60.0" />
+                        <PackageReference Include="Microsoft.Playwright.NUnit"  Version="1.60.0" />
+                        <PackageReference Include="Microsoft.Playwright.MSTest" Version="1.60.0" />
+                        <PackageReference Include="Microsoft.NET.Test.Sdk"      Version="17.11.1" />
+                        <PackageReference Include="NUnit"                       Version="4.2.2" />
+                        <PackageReference Include="NUnit3TestAdapter"           Version="4.6.0" />
+                        <PackageReference Include="MSTest.TestFramework"        Version="3.6.4" />
+                        <PackageReference Include="MSTest.TestAdapter"          Version="3.6.4" />
+                      </ItemGroup>
+                    </Project>
+                    """);
+
+                string packagesDir = Path.Combine(devpackRestoreTmp, "packages");
+                RunDotnet(shellDir,
+                    "restore", shellCsproj,
+                    "--packages", packagesDir,
+                    "--runtime", rid,
+                    "--no-cache",
+                    "--verbosity", "minimal");
+            });
+
+            // STEP D2: flatten .nupkg files to devpack/nuget/ and write INDEX.txt
+            Step("Dev pack: collect .nupkg files", () =>
+            {
+                string packagesDir = Path.Combine(devpackRestoreTmp, "packages");
+                if (!Directory.Exists(packagesDir))
+                    throw new InvalidOperationException($"Packages dir missing after restore: {packagesDir}");
+
+                var nupkgs = Directory.GetFiles(packagesDir, "*.nupkg", SearchOption.AllDirectories);
+                if (nupkgs.Length == 0)
+                    throw new InvalidOperationException("Restore completed but produced zero .nupkg files.");
+
+                var collected = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var src in nupkgs)
+                {
+                    var name = Path.GetFileName(src);
+                    if (collected.Add(name))
+                    {
+                        File.Copy(src, Path.Combine(devpackNugetDir, name), overwrite: true);
+                    }
+                }
+                var index = new StringBuilder();
+                index.AppendLine("# Playwright Offline Dev Pack — bundled .nupkg files");
+                index.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}");
+                index.AppendLine($"# Count: {collected.Count}");
+                foreach (var n in collected) index.AppendLine(n);
+                File.WriteAllText(Path.Combine(devpackNugetDir, "INDEX.txt"), index.ToString());
+                Console.WriteLine($"   Collected {collected.Count} unique .nupkg files.");
+            });
+
+            // STEP D3: copy assets-devpack/ (setup-devpack.ps1 etc.)
+            Step("Dev pack: stage assets", () => CopyDirectory(assetsDevpackDir, devpackStaging, overwrite: true));
+
+            // STEP D4: write BUILD-INFO.txt
+            Step("Dev pack: write build metadata", () =>
+            {
+                var meta = $"""
+                    Playwright Offline Dev Pack
+                    ===========================
+                    Built on    : {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}
+                    RID         : {rid}
+                    Configuration: {config}
+                    Purpose     : Offline NuGet feed for writing your own Playwright tests
+                    """;
+                File.WriteAllText(Path.Combine(devpackStaging, "BUILD-INFO.txt"), meta);
+            });
+
+            // STEP D5: zip the dev pack
+            string devpackZipName = $"PlaywrightDevPack-{rid}-{timestamp}.zip";
+            devpackZipPath = Path.Combine(outputDir, devpackZipName);
+            Step("Dev pack: create ZIP", () =>
+            {
+                if (File.Exists(devpackZipPath)) File.Delete(devpackZipPath);
+                ZipFile.CreateFromDirectory(devpackStaging, devpackZipPath, CompressionLevel.Optimal, includeBaseDirectory: false, Encoding.UTF8);
+                var size = new FileInfo(devpackZipPath).Length;
+                Console.WriteLine($"   Dev pack ZIP size: {FormatBytes(size)}");
+            });
+        }
+        finally
+        {
+            try { if (Directory.Exists(devpackStaging))    Directory.Delete(devpackStaging,    recursive: true); } catch { }
+            try { if (Directory.Exists(devpackRestoreTmp)) Directory.Delete(devpackRestoreTmp, recursive: true); } catch { }
+        }
+    }
+
     Console.WriteLine();
     Console.WriteLine("================================================================");
     Console.WriteLine(" SUCCESS");
     Console.WriteLine("================================================================");
-    Console.WriteLine($" Output: {zipPath}");
+    Console.WriteLine($" Runtime ZIP : {zipPath}");
+    if (devpackZipPath is not null)
+        Console.WriteLine($" Dev pack ZIP: {devpackZipPath}");
     Console.WriteLine();
     Console.WriteLine(" Transfer this ZIP to the offline Windows machine,");
     Console.WriteLine(" extract it, then double-click '點擊兩下-install.cmd'.");
@@ -233,6 +357,8 @@ static void PrintHelp()
     Console.WriteLine("  --config <name>     Build configuration (default: Release)");
     Console.WriteLine("  --output <dir>      Output directory relative to repo root (default: output)");
     Console.WriteLine("  --project <path>    Sample project to publish (default: src/PlaywrightSampleApp/PlaywrightSampleApp.csproj)");
-    Console.WriteLine("  --assets <dir>      Assets folder to bundle (default: assets)");
+    Console.WriteLine("  --assets <dir>      Runtime assets folder (default: assets)");
+    Console.WriteLine("  --assets-devpack <dir>  Dev pack assets folder (default: assets-devpack)");
+    Console.WriteLine("  --devpack           Also produce a separate PlaywrightDevPack-*.zip with offline NuGet feed");
     Console.WriteLine("  -h, --help          Show this help");
 }

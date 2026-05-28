@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Dev Pack ZIP** (`PlaywrightDevPack-win-x64-*.zip`) — separate, opt-in
+  offline NuGet bundle for **dev machines that want to write new Playwright
+  tests offline**. Produced by packager when called with `--devpack`.
+  - Contains `Microsoft.Playwright`, `Microsoft.Playwright.NUnit`,
+    `Microsoft.Playwright.MSTest`, `Microsoft.NET.Test.Sdk`, NUnit, MSTest,
+    and their dependencies (≈ 280 MB, 26 nupkgs).
+  - `setup-devpack.ps1` self-elevates, copies `.nupkg` files into the
+    **standard machine-wide offline feed**
+    (`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`) — the same folder
+    Visual Studio Installer uses — and registers a NuGet source in
+    `%ProgramData%\NuGet\NuGet.Config`. After setup, any project on the
+    machine can `dotnet add package Microsoft.Playwright` with no internet.
+  - Also sets `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` and
+    `PLAYWRIGHT_BROWSERS_PATH=0` so the dev pack works standalone (no need
+    to also install the runtime ZIP).
+  - Existing `NuGet.Config` is backed up to `.bak.YYYYMMDD-HHMMSS` before
+    editing. `nuget.org` is **not** disabled by default; pass
+    `-DisableNuGetOrg` for strict offline mode.
+  - `uninstall-devpack.ps1` removes the source entry and the .nupkg files
+    we deployed (by `INDEX.txt` allow-list, so other Microsoft offline
+    packages in the shared folder are untouched).
+- Release workflow now builds and attaches both ZIPs to every GitHub
+  Release. The `verify-offline` job intentionally only tests the runtime
+  ZIP — exercising the dev pack on the runner would make invasive
+  machine-wide NuGet config changes.
+
 ## [0.3.0] - 2026-05-28
 
 ### Documentation

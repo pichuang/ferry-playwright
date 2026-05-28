@@ -26,6 +26,9 @@ jobs:
       zip_name: ${{ steps.locate.outputs.zip_name }}
       zip_sha256: ${{ steps.locate.outputs.zip_sha256 }}
       zip_size_mb: ${{ steps.locate.outputs.zip_size_mb }}
+      devpack_name: ${{ steps.locate.outputs.devpack_name }}
+      devpack_sha256: ${{ steps.locate.outputs.devpack_sha256 }}
+      devpack_size_mb: ${{ steps.locate.outputs.devpack_size_mb }}
       version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout (full history)
@@ -56,17 +59,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
-      - name: Run packager
-        run: dotnet run --project src/PlaywrightOfflinePackager -c Release
+      - name: Run packager (runtime + dev pack)
+        run: dotnet run --project src/PlaywrightOfflinePackager -c Release -- --devpack
 
-      - name: Locate ZIP and compute SHA256
+      - name: Locate ZIPs and compute SHA256
         id: locate
         shell: bash
         run: |
           set -euo pipefail
           ZIP=$(ls -t output/PlaywrightOffline-*.zip | head -1)
           if [[ -z "$ZIP" ]]; then
-            echo "::error::No ZIP produced under output/"
+            echo "::error::No runtime ZIP produced under output/"
             exit 1
           fi
           NAME=$(basename "$ZIP")
@@ -76,9 +79,23 @@ jobs:
           echo "zip_name=$NAME"       >> "$GITHUB_OUTPUT"
           echo "zip_sha256=$SHA"      >> "$GITHUB_OUTPUT"
           echo "zip_size_mb=$SIZE_MB" >> "$GITHUB_OUTPUT"
-          echo "ZIP : $ZIP"
-          echo "SHA : $SHA"
-          echo "Size: ${SIZE_MB} MB"
+          echo "Runtime ZIP : $ZIP ($SIZE_MB MB)"
+          echo "SHA         : $SHA"
+
+          DEVPACK=$(ls -t output/PlaywrightDevPack-*.zip | head -1)
+          if [[ -z "$DEVPACK" ]]; then
+            echo "::error::No dev pack ZIP produced under output/"
+            exit 1
+          fi
+          DNAME=$(basename "$DEVPACK")
+          DSHA=$(sha256sum "$DEVPACK" | awk '{print $1}')
+          DSIZE_MB=$(awk "BEGIN{printf \"%.2f\", $(stat -c%s "$DEVPACK") / 1048576}")
+          echo "devpack_path=$DEVPACK"     >> "$GITHUB_OUTPUT"
+          echo "devpack_name=$DNAME"       >> "$GITHUB_OUTPUT"
+          echo "devpack_sha256=$DSHA"      >> "$GITHUB_OUTPUT"
+          echo "devpack_size_mb=$DSIZE_MB" >> "$GITHUB_OUTPUT"
+          echo "Dev pack ZIP: $DEVPACK ($DSIZE_MB MB)"
+          echo "SHA         : $DSHA"
 
       - name: Verify ZIP contents
         shell: bash
@@ -89,7 +106,19 @@ jobs:
             if unzip -l "$ZIP" | grep -qE "[[:space:]]${needle//./\\.}\$"; then
               echo "  ✓ $needle"
             else
-              echo "::error::Required entry missing from ZIP: $needle"
+              echo "::error::Required entry missing from runtime ZIP: $needle"
+              exit 1
+            fi
+          done
+
+          echo
+          echo "Dev pack ZIP contents:"
+          DEVPACK="${{ steps.locate.outputs.devpack_path }}"
+          for needle in "setup-devpack.ps1" "uninstall-devpack.ps1" "README.txt" "nuget/INDEX.txt" "nuget/microsoft.playwright.1.60.0.nupkg" "nuget/microsoft.playwright.nunit.1.60.0.nupkg"; do
+            if unzip -l "$DEVPACK" | grep -qE "[[:space:]]${needle//./\\.}\$"; then
+              echo "  ✓ $needle"
+            else
+              echo "::error::Required entry missing from dev pack ZIP: $needle"
               exit 1
             fi
           done
@@ -103,25 +132,37 @@ jobs:
           ZIP_NAME="${{ steps.locate.outputs.zip_name }}"
           SHA="${{ steps.locate.outputs.zip_sha256 }}"
           SIZE_MB="${{ steps.locate.outputs.zip_size_mb }}"
+          DZIP_NAME="${{ steps.locate.outputs.devpack_name }}"
+          DSHA="${{ steps.locate.outputs.devpack_sha256 }}"
+          DSIZE_MB="${{ steps.locate.outputs.devpack_size_mb }}"
 
           PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${VERSION}\$" | head -1 || true)
           {
             echo "## Summary"
             echo ""
             echo "- **Version**: \`${VERSION}\`"
-            echo "- **Asset**: \`${ZIP_NAME}\`"
-            echo "- **Size**: ${SIZE_MB} MB"
-            echo "- **SHA256**: \`${SHA}\`"
             echo "- **Built**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             echo "- **Source commit**: ${GITHUB_SHA}"
+            echo ""
+            echo "### Assets"
+            echo ""
+            echo "| Asset | Size | SHA256 |"
+            echo "|---|---|---|"
+            echo "| \`${ZIP_NAME}\` (runtime) | ${SIZE_MB} MB | \`${SHA}\` |"
+            echo "| \`${DZIP_NAME}\` (dev pack, optional) | ${DSIZE_MB} MB | \`${DSHA}\` |"
+            echo ""
+            echo "- **Runtime ZIP** — install on target machines that only need to *run* the Playwright app."
+            echo "- **Dev pack ZIP** — install on dev machines that want to *write* new Playwright tests offline. Drops Microsoft.Playwright / NUnit / MSTest .nupkgs into the standard machine-wide offline NuGet feed."
             echo ""
             echo "## Self-test results"
             echo ""
             echo "This release is built only after the \`verify-offline\` job has:"
-            echo "- Installed the package on a clean Windows Server 2022 runner"
+            echo "- Installed the runtime package on a clean Windows Server 2022 runner"
             echo "- Blocked **all** outbound network traffic via Windows Defender Firewall"
             echo "- Successfully launched the sample application against \`about:blank\` headlessly"
             echo "- Audited TCP connections and confirmed **no external network activity**"
+            echo ""
+            echo "(Dev pack ZIP is not automatically tested — it makes machine-level NuGet config changes that would be invasive in CI.)"
             echo ""
             echo "## Changes"
             echo ""
@@ -150,12 +191,13 @@ jobs:
           cat release-notes.md
           echo "----------------------------"
 
-      - name: Upload ZIP + release notes artifact
+      - name: Upload ZIPs + release notes artifact
         uses: actions/upload-artifact@v4
         with:
           name: offline-package
           path: |
             output/PlaywrightOffline-*.zip
+            output/PlaywrightDevPack-*.zip
             release-notes.md
           if-no-files-found: error
           retention-days: 14
@@ -334,17 +376,19 @@ jobs:
       - name: List downloaded files
         run: ls -la artifact && find artifact -type f
 
-      - name: Move ZIP to flat path
+      - name: Move ZIPs to flat path
         run: |
           set -euo pipefail
           ZIP=$(find artifact -type f -name 'PlaywrightOffline-*.zip' | head -1)
+          DEVPACK=$(find artifact -type f -name 'PlaywrightDevPack-*.zip' | head -1)
           NOTES=$(find artifact -type f -name 'release-notes.md' | head -1)
-          if [[ -z "$ZIP" ]]; then echo "::error::ZIP not found in artifact"; exit 1; fi
+          if [[ -z "$ZIP" ]]; then echo "::error::Runtime ZIP not found in artifact"; exit 1; fi
+          if [[ -z "$DEVPACK" ]]; then echo "::error::Dev pack ZIP not found in artifact"; exit 1; fi
           if [[ -z "$NOTES" ]]; then echo "::error::release-notes.md not found in artifact"; exit 1; fi
           mkdir -p release-assets
-          cp "$ZIP"   release-assets/
-          cp "$NOTES" release-assets/
-          echo "ZIP=$(basename "$ZIP")" >> "$GITHUB_ENV"
+          cp "$ZIP"     release-assets/
+          cp "$DEVPACK" release-assets/
+          cp "$NOTES"   release-assets/
           ls -la release-assets/
 
       - name: Create / update GitHub Release
@@ -358,3 +402,4 @@ jobs:
           body_path: release-assets/release-notes.md
           files: |
             release-assets/PlaywrightOffline-*.zip
+            release-assets/PlaywrightDevPack-*.zip

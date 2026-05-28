@@ -48,6 +48,14 @@
 
 ## 給「拿到 ZIP」的人：怎麼安裝
 
+> 從 v0.4.0（即將發布）起，**每個 release 會附兩個 ZIP**：
+> - `PlaywrightOffline-win-x64-*.zip`（**runtime**）— 給「只要執行」的目標機器，**必裝**。
+> - `PlaywrightDevPack-win-x64-*.zip`（**dev pack**）— 給「想離線寫測試」的開發機器，**選裝**。
+>
+> 兩者完全獨立，可單獨使用、也可共存。先裝哪個都行。
+
+### 安裝 runtime ZIP（目標機）
+
 1. 把 `PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
 2. 進入解壓後的資料夾，**雙擊** `點擊兩下-install.cmd`。
 3. 接受 UAC 提權對話框。
@@ -88,6 +96,19 @@
 在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`（或右鍵 `uninstall.ps1` → 以 PowerShell 執行）。
 腳本會移除程式檔案、清掉環境變數、刪除捷徑。
 
+### 安裝 dev pack ZIP（開發機，選裝）
+
+只有當你要在這台機器**寫**新的 Playwright 測試時才需要。
+
+1. 把 `PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip` 解壓縮。
+2. **雙擊** `點擊兩下-setup-devpack.cmd`，接受 UAC。
+3. 看到 "Dev pack installed" 即完成。
+4. 之後任何專案 `dotnet new nunit && dotnet add package Microsoft.Playwright.NUnit`
+   都可以離線完成。詳見下方
+   「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
+
+解除安裝：雙擊 `點擊兩下-uninstall-devpack.cmd`。
+
 ---
 
 ## 給「想自己產生 ZIP」的人
@@ -101,6 +122,13 @@ dotnet run --project src/PlaywrightOfflinePackager
 ```
 
 ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`，把它拷給目標機就好。
+
+想同時產出 dev pack ZIP（給離線開發機 `dotnet add package` 用）：
+
+```bash
+dotnet run --project src/PlaywrightOfflinePackager -- --devpack
+# → 多一個 output/PlaywrightDevPack-win-x64-*.zip
+```
 
 > 進一步的打包選項、自訂應用、CI 自動發布、架構說明，請參考 **[DEVELOPER.md](DEVELOPER.md)**。
 
@@ -117,17 +145,25 @@ ZIP 會出現在 `output/PlaywrightOffline-win-x64-*.zip`，把它拷給目標�
    - 官方下載：<https://dotnet.microsoft.com/download>
    - 若這台機器**完全沒有網路**，請從另一台有網路的機器下載 SDK 安裝檔，
      再 sneakernet 過來；或在貴公司內部 NuGet/檔案伺服器準備離線安裝檔。
-2. **確認環境變數已套用**（我們的 `install.cmd` 已在機器層級設好）：
+2. **離線解決 NuGet 套件**：在離線機器執行
+   `dotnet add package Microsoft.Playwright` 預設會打 `api.nuget.org` 而失敗。
+   有兩種解法：
+
+   - **（推薦）裝我們的 Dev Pack ZIP** — 同一個 release 附上的
+     `PlaywrightDevPack-win-x64-*.zip`。解壓後雙擊
+     `點擊兩下-setup-devpack.cmd`，會把 `Microsoft.Playwright`、
+     `Microsoft.Playwright.NUnit`、`Microsoft.NET.Test.Sdk`、NUnit、MSTest
+     等 .nupkg **複製到 Microsoft 既有的全機器離線 feed 資料夾**
+     (`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`)，並在
+     `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source。之後任何新專案
+     `dotnet add package Microsoft.Playwright` 都跟有 nuget.org 一樣會成功。
+   - 或自行帶整個 `~/.nuget/packages` 過來，或自建內網 NuGet 私服。
+3. **確認環境變數已套用**（runtime ZIP 或 Dev Pack 任一個安裝都會設好）：
    ```powershell
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD','Machine')  # → 1
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH','Machine')         # → 0
    ```
    有了這兩個，新專案執行時就**不會**嘗試下載 Chromium，會走系統 Edge。
-
-> **離線提醒**：第一次 `dotnet restore`（拉 `Microsoft.Playwright` NuGet）通常需要
-> 連 nuget.org。如果這台機器完全沒網路，請在開發機先 restore 一次、把
-> `~/.nuget/packages` 整個帶過來，或自建內網 NuGet 私服。本專案目前不再隨 ZIP
-> 附 NuGet 來源。
 
 ### 核心模式：永遠用系統 Edge
 
@@ -275,11 +311,21 @@ A：本專案的 GitHub Actions 在每次 release 前會把 Windows runner 的�
 A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己的應用)。
 
 **Q：可以用這份安裝來「寫」新的測試嗎？**
-A：可以，但這份 ZIP 只內含 runtime。要寫新測試請先安裝 .NET 10 SDK
-（[官網下載](https://dotnet.microsoft.com/download)），其餘步驟見上面
+A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://dotnet.microsoft.com/download)）；
+   若機器完全離線，再安裝同 release 的 `PlaywrightDevPack-win-x64-*.zip`
+   解決 NuGet 套件下載問題。詳細步驟見上面
 「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
 我們安裝時設好的環境變數會自動套用到所有新專案，所以只要 launch 時用
 `Channel = "msedge"` 就能離線跑。
+
+**Q：Dev Pack ZIP 跟 runtime ZIP 有什麼不同？**
+A：runtime ZIP（`PlaywrightOffline-*.zip`）是給「只要執行」的目標機；
+Dev Pack ZIP（`PlaywrightDevPack-*.zip`）是給「想寫新測試」的開發機，
+裡面是一組 .nupkg 加上 `setup-devpack.ps1`，安裝後會把 Microsoft.Playwright
+等套件放進 Microsoft 既有的全機器離線 NuGet feed
+(`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`) 並註冊機器層 NuGet source。
+之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。兩個 ZIP
+可以單獨使用，也可以共存。
 
 ---
 

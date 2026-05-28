@@ -84,12 +84,23 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   `Console.ReadLine()`, default URL is `about:blank`. Preserve this contract — the
   workflow's offline test depends on it.
 - **Packager pipeline order** (in `src/PlaywrightOfflinePackager/Program.cs`):
-  `Restore` → `Publish` → **`Verify Playwright driver present`** → `Stage assets` →
+  Runtime ZIP: `Restore` → `Publish` → **`Verify Playwright driver present`** → `Stage assets` →
   `Write BUILD-INFO.txt` → `Create ZIP`. The driver-presence verification is the single
   most important guard — keep it. ZIP must include `app/.playwright/node/win32_x64/node.exe`.
+  Dev pack ZIP (only when `--devpack` flag is passed): `Restore shell project` (synthesized
+  csproj pinning Microsoft.Playwright + .NUnit + .MSTest + Test.Sdk + NUnit + MSTest at fixed
+  versions) → `Collect .nupkg files` (flatten + dedupe + write INDEX.txt) →
+  `Stage dev pack assets` (from `assets-devpack/`) → `Write BUILD-INFO.txt` → `Create dev pack ZIP`.
 - **install.ps1** self-elevates, requires Edge unless `-SkipEdgeCheck` is passed, installs
   to `%ProgramFiles%\PlaywrightApp`, sets *machine-scope* env vars, creates Start Menu +
   Desktop shortcuts. Mirror any change in `uninstall.ps1`.
+- **setup-devpack.ps1** (in `assets-devpack/`) self-elevates, copies bundled `.nupkg` files
+  into `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages` (the standard Microsoft offline
+  feed folder), registers it as `PlaywrightOfflineFeed` in `%ProgramData%\NuGet\NuGet.Config`
+  (idempotent XML edit with `.bak.YYYYMMDD-HHMMSS` backup), and idempotently sets the same
+  `PLAYWRIGHT_*` env vars as `install.ps1` so the dev pack works standalone. Does NOT
+  disable nuget.org by default. `uninstall-devpack.ps1` removes only the .nupkg files
+  listed in `nuget/INDEX.txt` — never sweeps the shared folder.
 - **Versioning / changelog**: bumps go in `CHANGELOG.md` (Keep a Changelog style) and are
   released by pushing a `vX.Y.Z` tag. The workflow auto-generates the diff-vs-previous-tag
   block in the release body — don't try to write that part by hand.

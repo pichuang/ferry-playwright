@@ -30,7 +30,13 @@ ferry-playwright/
 │   ├── install.ps1                  # 目標機一鍵安裝腳本
 │   ├── 點擊兩下-uninstall.cmd        # 雙擊執行的包裝（呼叫 uninstall.ps1）
 │   ├── uninstall.ps1                # 解除安裝腳本
-│   └── README.txt                   # 給最終使用者（繁體中文，會包進 ZIP）
+│   └── README.txt                   # 給最終使用者（繁體中文，會包進 runtime ZIP）
+├── assets-devpack/                  # dev pack ZIP 用的 staging 來源（--devpack 才用）
+│   ├── 點擊兩下-setup-devpack.cmd
+│   ├── setup-devpack.ps1            # 註冊離線 NuGet feed + 寫機器層 NuGet.Config
+│   ├── 點擊兩下-uninstall-devpack.cmd
+│   ├── uninstall-devpack.ps1
+│   └── README.txt                   # 給 dev pack 使用者（繁體中文，會包進 dev pack ZIP）
 ├── .github/
 │   ├── workflows/release.yml        # CI：打包 + 離線驗證 + GitHub Release
 │   └── copilot-instructions.md      # 給 Copilot 的 repo 速覽
@@ -89,6 +95,8 @@ dotnet run --project src/PlaywrightOfflinePackager -- \
 
 `src/PlaywrightOfflinePackager/Program.cs` 是單檔頂層程式，步驟順序：
 
+### Runtime ZIP（永遠會跑）
+
 1. **Restore** — `dotnet restore <sample.csproj>`。
 2. **Publish** — `dotnet publish -c Release -r win-x64 --self-contained true` 到暫存 `app/`。
 3. **Verify Playwright driver present** — 強制檢查 `app/.playwright/node/win32_x64/node.exe`
@@ -97,10 +105,22 @@ dotnet run --project src/PlaywrightOfflinePackager -- \
 5. **Write build metadata** — 寫 `BUILD-INFO.txt`（RID、設定、時間）。
 6. **Create ZIP** — 把整個 staging 目錄壓成 `output/PlaywrightOffline-win-x64-<timestamp>.zip`。
 
+### Dev Pack ZIP（傳 `--devpack` 才跑）
+
+7. **Dev pack: restore shell project** — 在暫存資料夾寫一個 minimal `shell.csproj`，
+   參照 `Microsoft.Playwright`、`Microsoft.Playwright.NUnit`、`Microsoft.Playwright.MSTest`、
+   `Microsoft.NET.Test.Sdk`、`NUnit` + adapter、`MSTest` + adapter，然後跑
+   `dotnet restore --packages <tmp> --runtime win-x64 --no-cache`。
+8. **Dev pack: collect .nupkg files** — 遞迴搜出所有 `*.nupkg`，去重後 flatten 到
+   `devpack/nuget/`，並寫 `INDEX.txt`（卸載腳本會用此清單）。
+9. **Dev pack: stage assets** — 把 `assets-devpack/` 內容（setup/uninstall ps1+cmd + README）複製。
+10. **Dev pack: write build metadata** — 寫 `BUILD-INFO.txt`。
+11. **Dev pack: create ZIP** — 產 `output/PlaywrightDevPack-win-x64-<timestamp>.zip`。
+
 最終 ZIP 結構：
 
 ```
-PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
+PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip   (runtime, ~70 MB)
 ├── app/                              # self-contained publish 輸出
 │   ├── PlaywrightSampleApp.exe
 │   ├── *.dll                         # .NET runtime + Microsoft.Playwright
@@ -109,6 +129,23 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
 ├── install.ps1
 ├── 點擊兩下-uninstall.cmd
 ├── uninstall.ps1
+├── README.txt
+└── BUILD-INFO.txt
+
+PlaywrightDevPack-win-x64-YYYYMMDD-HHMMSS.zip   (dev pack, ~280 MB, 選裝)
+├── nuget/
+│   ├── microsoft.playwright.1.60.0.nupkg
+│   ├── microsoft.playwright.nunit.1.60.0.nupkg
+│   ├── microsoft.playwright.mstest.1.60.0.nupkg
+│   ├── microsoft.net.test.sdk.*.nupkg
+│   ├── nunit.*.nupkg + nunit3testadapter.*.nupkg
+│   ├── mstest.*.nupkg + mstest.testadapter.*.nupkg
+│   ├── ... (26 unique nupkgs total)
+│   └── INDEX.txt
+├── 點擊兩下-setup-devpack.cmd
+├── setup-devpack.ps1
+├── 點擊兩下-uninstall-devpack.cmd
+├── uninstall-devpack.ps1
 ├── README.txt
 └── BUILD-INFO.txt
 ```
@@ -137,6 +174,39 @@ PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip
   if (\$errors) { \$errors | %{ \$_.Message } ; exit 1 }
   "@
   ```
+
+---
+
+## Dev Pack 設計
+
+`assets-devpack/` 是 dev pack 專用 staging 來源，與 runtime 的 `assets/` 完全分離。
+
+- **shell.csproj（packager 內動態產生）**：故意拉一個完整的 NUnit + MSTest + Test SDK
+  圖，包含 `Microsoft.Playwright(.NUnit/.MSTest)` 1.60.0。版本寫死，避免每次打包
+  抓到不同版本造成「黑盒擴張」。
+- **為什麼用 `dotnet restore --packages <tmp>` 而不是 `nuget install`**：純 .NET SDK
+  即可，不需要額外裝 nuget.exe；CI 跑得起來。
+- **flatten 策略**：`--packages` 解出的目錄結構是 `{id-lowercase}/{version}/...`，
+  每個版本資料夾內有原本的 `.nupkg`。我們遞迴抓所有 `*.nupkg`、用檔名去重（同 id
+  同 version 不會出現兩個 nupkg），複製到 `devpack/nuget/`。產出 26 個唯一檔案。
+- **為什麼落點選 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`**：這是
+  Visual Studio Installer 寫 Offline Packages 的同一個資料夾，VS 安裝後預設
+  package source `Microsoft Visual Studio Offline Packages` 就指向它。把我們的
+  nupkg 放這裡，VS 使用者連 NuGet.Config 都不必改就看得到 Microsoft.Playwright。
+- **為什麼還要另外寫 `%ProgramData%\NuGet\NuGet.Config`**：純 .NET SDK / VS Code
+  場景沒有 VS 的 NuGet config，所以需要在機器層 NuGet.Config 顯式加 source。
+  setup 用 `[xml]` 物件 idempotent 操作（重覆執行不會堆出重複條目），改前先
+  `Copy-Item` 備份為 `.bak.YYYYMMDD-HHMMSS`。
+- **預設不停用 nuget.org**：使用者若偶爾有網路通道，nuget.org 仍可走 fallback；
+  想強制離線可帶 `-DisableNuGetOrg`。
+- **冪等設環境變數**：與 `install.ps1` 同樣寫
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`、`PLAYWRIGHT_BROWSERS_PATH=0`（Machine
+  scope），讓 dev pack 可單獨使用，不必先裝 runtime ZIP。
+- **uninstall-devpack.ps1 的限制**：
+  - 用 `INDEX.txt` 當 allow-list，**只**刪我們塞進去的 nupkg；不誤刪
+    `Microsoft SDKs\NuGetPackages` 內 VS Installer 既有的套件。
+  - 不清 `%USERPROFILE%\.nuget\packages`（其他專案可能在用已 restore 的版本）。
+  - 不清 PLAYWRIGHT_* 環境變數（runtime ZIP 可能還在用）。
 
 ---
 
