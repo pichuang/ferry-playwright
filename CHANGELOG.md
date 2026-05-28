@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-28
+
 ### Added
 - **Dev Pack ZIP** (`PlaywrightDevPack-win-x64-*.zip`) — separate, opt-in
   offline NuGet bundle for **dev machines that want to write new Playwright

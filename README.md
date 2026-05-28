@@ -10,7 +10,7 @@
 
 | 項目 | 版本 |
 | --- | --- |
-| ferry-playwright | **v0.3.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| ferry-playwright | **v0.4.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
 | Microsoft.Playwright (.NET) | **1.60.0** |
 | .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
 | 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
