@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Text;
 
 // PlaywrightOfflinePackager
 // 一鍵將 PlaywrightSampleApp 打包為離線 ZIP（含 self-contained .NET runtime 與 Playwright driver）。
@@ -119,7 +120,7 @@ try
     Step("Create ZIP", () =>
     {
         if (File.Exists(zipPath)) File.Delete(zipPath);
-        ZipFile.CreateFromDirectory(stagingRoot, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false);
+        ZipFile.CreateFromDirectory(stagingRoot, zipPath, CompressionLevel.Optimal, includeBaseDirectory: false, Encoding.UTF8);
         var size = new FileInfo(zipPath).Length;
         Console.WriteLine($"   ZIP size: {FormatBytes(size)}");
     });
@@ -131,7 +132,7 @@ try
     Console.WriteLine($" Output: {zipPath}");
     Console.WriteLine();
     Console.WriteLine(" Transfer this ZIP to the offline Windows machine,");
-    Console.WriteLine(" extract it, then double-click 'install.cmd'.");
+    Console.WriteLine(" extract it, then double-click '點擊兩下-install.cmd'.");
     return 0;
 }
 catch (Exception ex)

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed double-click launchers to `點擊兩下-install.cmd` /
+  `點擊兩下-uninstall.cmd` so end users see the "double-click" hint
+  directly in the filename. The underlying `install.ps1` / `uninstall.ps1`
+  scripts keep their original names.
+- End-user `assets/README.txt` rewritten in Traditional Chinese
+  (UTF-8 with BOM) so it displays correctly in Notepad on Windows.
+- Packager now writes the ZIP with UTF-8 entry name encoding (sets
+  General-purpose bit 11) so Chinese filenames survive Windows
+  Explorer's built-in extractor.
+
 ## [0.2.0] - 2026-05-28
 
 ### Added

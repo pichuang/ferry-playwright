@@ -49,12 +49,12 @@
 ## 給「拿到 ZIP」的人：怎麼安裝
 
 1. 把 `PlaywrightOffline-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
-2. 進入解壓後的資料夾，**雙擊** `install.cmd`。
+2. 進入解壓後的資料夾，**雙擊** `點擊兩下-install.cmd`。
 3. 接受 UAC 提權對話框。
 4. 等畫面跳出「Installation complete」即完成。
 
 > 進階：也可以「右鍵 `install.ps1` → 以 PowerShell 執行」傳入額外參數
-> （例如 `install.cmd -SkipNuGetFeed`）。
+> （例如 `-SkipEdgeCheck`、`-NoShortcuts`、`-InstallDir "D:\Apps\Playwright"`）。
 
 安裝腳本會自動：
 
@@ -85,7 +85,7 @@
 
 ### 解除安裝
 
-在同一個解壓資料夾，**雙擊** `uninstall.cmd`（或右鍵 `uninstall.ps1` → 以 PowerShell 執行）。
+在同一個解壓資料夾，**雙擊** `點擊兩下-uninstall.cmd`（或右鍵 `uninstall.ps1` → 以 PowerShell 執行）。
 腳本會移除程式檔案、清掉環境變數、刪除捷徑。
 
 ---
