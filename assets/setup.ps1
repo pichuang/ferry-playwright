@@ -7,7 +7,7 @@
     "runtime" portion to install: the ZIP no longer ships a precompiled
     PlaywrightSampleApp.exe. After running this script:
 
-      - Bundled .nupkg files live in %ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages
+      - Bundled .nupkg files live under %USERPROFILE%\.nuget\packages
       - Machine-level NuGet.Config registers PlaywrightOfflineFeed
       - Machine env vars PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1,
         PLAYWRIGHT_BROWSERS_PATH=0 are set

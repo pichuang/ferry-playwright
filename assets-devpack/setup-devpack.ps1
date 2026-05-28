@@ -3,9 +3,9 @@
     Install the Playwright offline NuGet dev pack on Windows 11 / Windows Server 2022.
 
 .DESCRIPTION
-    Copies bundled .nupkg files into the standard machine-wide offline NuGet feed
-    folder (%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages), then registers that
-    folder as a NuGet package source in the machine-level NuGet.Config so any
+    Copies bundled .nupkg files into the user's default NuGet package folder
+    (%USERPROFILE%\.nuget\packages), then registers that folder as a NuGet
+    package source in the machine-level NuGet.Config so any
     .NET SDK / Visual Studio / VS Code project can `dotnet add package
     Microsoft.Playwright` and friends without internet access.
 
@@ -25,7 +25,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$FeedDir = (Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs\NuGetPackages'),
+    [string]$FeedDir = (Join-Path $env:USERPROFILE '.nuget\packages'),
     [string]$SourceName = 'PlaywrightOfflineFeed',
     [switch]$KeepNuGetOrg,
     [switch]$DisableNuGetOrg  # deprecated alias; offline-only is now the default
@@ -84,10 +84,11 @@ Write-Host (" Packages   : {0} .nupkg file(s)" -f $nupkgFiles.Count)
 # Helper: parse "<id>.<version>.nupkg" into (id, version). Versions can contain dots and dashes.
 function Get-NupkgIdVersion {
     param([string]$fileName)
-    $base = [IO.Path]::GetFileNameWithoutExtension($fileName)
+    $leaf = Split-Path -Leaf $fileName
+    $base = [IO.Path]::GetFileNameWithoutExtension($leaf)
     # First chunk starting with a digit is the version.
     if ($base -match '^(?<id>.+?)\.(?<ver>\d[\w\.\-\+]*)$') {
-        return [pscustomobject]@{ Id = $matches['id'].ToLowerInvariant(); Version = $matches['ver']; FileName = $fileName }
+        return [pscustomobject]@{ Id = $matches['id'].ToLowerInvariant(); Version = $matches['ver']; FileName = $leaf }
     }
     return $null
 }
@@ -97,6 +98,9 @@ $sentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
 $sentinelPath = Join-Path $FeedDir $sentinelName
 
 $newNupkgInfo = @($nupkgFiles | ForEach-Object { Get-NupkgIdVersion $_.Name } | Where-Object { $_ })
+if ($newNupkgInfo.Count -ne $nupkgFiles.Count) {
+    throw 'Could not parse one or more bundled .nupkg file names into package id/version.'
+}
 $newIds = @{}
 foreach ($info in $newNupkgInfo) { $newIds[$info.Id] = $info }
 $newFileNames = @{}
@@ -107,10 +111,10 @@ if (Test-Path $sentinelPath) {
     $previous = @(Get-Content $sentinelPath | Where-Object { $_ -and -not $_.StartsWith('#') })
     $removed = 0
     foreach ($prevFile in $previous) {
-        if ($newFileNames.ContainsKey($prevFile)) { continue }  # same file in new bundle — keep
+        if ($newFileNames.ContainsKey($prevFile)) { continue }  # same file in new bundle - keep
         $prevInfo = Get-NupkgIdVersion $prevFile
         if ($null -eq $prevInfo) { continue }
-        if (-not $newIds.ContainsKey($prevInfo.Id)) { continue } # id not in new bundle — leave it alone
+        if (-not $newIds.ContainsKey($prevInfo.Id)) { continue } # id not in new bundle - leave it alone
         $oldPath = Join-Path $FeedDir $prevFile
         if (Test-Path $oldPath) {
             Remove-Item -Path $oldPath -Force
@@ -121,8 +125,8 @@ if (Test-Path $sentinelPath) {
     if ($removed -eq 0) { Write-Host ' Nothing to remove.' }
 }
 
-# Step 1 — copy nupkgs to machine-wide feed
-Write-Section 'Copying packages to machine-wide offline feed'
+# Step 1 — copy nupkgs to the user's default NuGet package folder
+Write-Section 'Copying packages to user NuGet package folder'
 New-Item -ItemType Directory -Path $FeedDir -Force | Out-Null
 foreach ($f in $nupkgFiles) {
     $target = Join-Path $FeedDir $f.Name

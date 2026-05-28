@@ -203,10 +203,10 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
 - **flatten 策略**：`--packages` 解出的目錄結構是 `{id-lowercase}/{version}/...`，
   每個版本資料夾內有原本的 `.nupkg`。我們遞迴抓所有 `*.nupkg`、用檔名去重（同 id
   同 version 不會出現兩個 nupkg），複製到 ZIP 內的 `nuget/`。產出 26 個唯一檔案。
-- **為什麼落點選 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`**：這是
-  Visual Studio Installer 寫 Offline Packages 的同一個資料夾，VS 安裝後預設
-  package source `Microsoft Visual Studio Offline Packages` 就指向它。把我們的
-  nupkg 放這裡，VS 使用者連 NuGet.Config 都不必改就看得到 Microsoft.Playwright。
+- **為什麼落點選 `%USERPROFILE%\.nuget\packages`**：這是 NuGet 預設的使用者
+  global package 位置，符合 `dotnet restore` / `dotnet add package` 的常見預設。
+  setup 會把 nupkg 依 package id / version 放入這個資料夾，並另外註冊
+  `PlaywrightOfflineFeed` 指向同一路徑，讓嚴格離線的 `dotnet add package` 仍能解析。
 - **為什麼還要另外寫 `%ProgramData%\NuGet\NuGet.Config`**：純 .NET SDK / VS Code
   場景沒有 VS 的 NuGet config，所以需要在機器層 NuGet.Config 顯式加 source。
   setup 用 `[xml]` 物件 idempotent 操作（重覆執行不會堆出重複條目），改前先
@@ -243,13 +243,13 @@ dev pack 現在**直接合併進單一 ZIP**（與 runtime 同處 ZIP 根目錄�
   - 解析每個檔名 → `(id, version)`（regex `^(?<id>.+?)\.(?<ver>\d[\w\.\-\+]*)$`）。
   - 對於 sentinel 中的舊檔，若新 bundle 也有同 id 但版本不同 → 刪掉 FeedDir 內的舊檔。
   - 拷新檔、覆寫 sentinel。
-  - 結果：FeedDir 內**永遠只剩最新一組**我們的 nupkg；其他 Microsoft offline
-    套件（VS Installer 留的）一律不動，因為它們不在 sentinel 裡。
+  - 結果：FeedDir 內**永遠只剩最新一組**我們的 nupkg；其他 NuGet cache
+    內容一律不動，因為它們不在 sentinel 裡。
 - **uninstall-devpack.ps1 的限制**：
   - 優先用 `<FeedDir>\PlaywrightOfflineFeed.INDEX.txt`（涵蓋升級累積的所有檔），
     找不到才退回 bundled `nuget/INDEX.txt`。**只**刪這份清單裡的檔，不誤刪
-    VS Installer 既有的套件。完成後也會把 sentinel 一併刪掉。
-  - 不清 `%USERPROFILE%\.nuget\packages`（其他專案可能在用已 restore 的版本）。
+    其他 NuGet cache 內容。完成後也會把 sentinel 一併刪掉。
+  - 不掃整個 `%USERPROFILE%\.nuget\packages`（其他專案可能在用已 restore 的版本）。
   - 不清 PLAYWRIGHT_* 環境變數（runtime 可能還在用）；那是 `uninstall-runtime.ps1`
     的工作。
 

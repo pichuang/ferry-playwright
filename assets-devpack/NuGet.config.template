@@ -16,6 +16,6 @@
 <configuration>
   <packageSources>
     <clear />
-    <add key="PlaywrightOfflineFeed" value="%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages" />
+    <add key="PlaywrightOfflineFeed" value="%USERPROFILE%\.nuget\packages" />
   </packageSources>
 </configuration>

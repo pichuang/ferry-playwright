@@ -5,7 +5,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$FeedDir = (Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs\NuGetPackages'),
+    [string]$FeedDir = (Join-Path $env:USERPROFILE '.nuget\packages'),
     [string]$SourceName = 'PlaywrightOfflineFeed'
 )
 
@@ -61,10 +61,10 @@ if (Test-Path $nugetConfig) {
         $cfg.Save($nugetConfig)
         Write-Host (" - Removed <{0}> from {1}" -f $SourceName, $nugetConfig)
     } catch {
-        Write-Warning "Could not parse $nugetConfig — leaving untouched. Error: $_"
+        Write-Warning "Could not parse $nugetConfig - leaving untouched. Error: $_"
     }
 } else {
-    Write-Host " NuGet.Config not found at $nugetConfig — nothing to unregister."
+    Write-Host " NuGet.Config not found at $nugetConfig - nothing to unregister."
 }
 
 # Step 2 — remove .nupkg files we deployed. Prefer the FeedDir sentinel (covers files
@@ -91,8 +91,9 @@ if ($lines) {
         if (-not $line -or $line.StartsWith('#')) { continue }
         $candidate = Join-Path $FeedDir $line
         if (Test-Path $candidate) {
+            $displayPath = Resolve-Path -Path $candidate -Relative
             Remove-Item -Path $candidate -Force
-            Write-Host " - $line"
+            Write-Host (" - {0}" -f $displayPath)
             $removed++
         }
     }
@@ -105,6 +106,6 @@ if ($lines) {
 }
 
 Write-Section 'Dev pack uninstalled'
-Write-Host ' Note: %USERPROFILE%\.nuget\packages was intentionally NOT touched.' -ForegroundColor Yellow
+Write-Host ' Note: only the allow-listed dev pack package files were removed from %USERPROFILE%\.nuget\packages.' -ForegroundColor Yellow
 Write-Host ' Note: PLAYWRIGHT_* environment variables were intentionally NOT cleared,'
 Write-Host '       because the runtime installer may still be using them.'

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dev-pack setup now places bundled `.nupkg` files under the user's default
+  NuGet package location (`%USERPROFILE%\.nuget\packages`) instead of the
+  machine-wide Visual Studio offline package folder, while still registering
+  `PlaywrightOfflineFeed` for strict offline restores.
+
 ## [0.6.0] - 2026-05-28
 
 ### BREAKING

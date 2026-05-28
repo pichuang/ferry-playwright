@@ -62,8 +62,8 @@
 
 腳本會：
 
-- 把所有 `.nupkg` 複製到 `%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`
-  （Microsoft 標準離線 feed 位置）
+- 把所有 `.nupkg` 複製到 `%USERPROFILE%\.nuget\packages`
+  （NuGet 預設的使用者 package 位置）
 - 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條 `PlaywrightOfflineFeed` 來源
   （舊檔備份為 `.bak.YYYYMMDD-HHMMSS`），預設停用 `nuget.org`（嚴格離線）
 - 設機器層環境變數 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` /
@@ -121,7 +121,7 @@ dotnet add package Microsoft.Playwright.NUnit
 直接執行新版 ZIP 內的 `點擊兩下-完整安裝(推薦).cmd` 即可，**不需要**先解除安裝。腳本會自動：
 
 - dev pack 部分會讀取上次留下的 sentinel `PlaywrightOfflineFeed.INDEX.txt`，**只刪掉同 package id
-  但不同版本的舊 .nupkg**，再放入新版；其他 Microsoft offline 套件（VS Installer 留下的）一律不動。
+  但不同版本或舊版佈局的 .nupkg**，再放入新版；其他 NuGet cache 內容一律不動。
 - 若偵測到舊版（v0.5.x）的 `C:\Program Files\PlaywrightApp\`，會順手清掉。
 
 ### 解除安裝
@@ -168,8 +168,8 @@ ZIP 會出現在 `output/PlaywrightOffline-vX.Y.Z-win-x64-*.zip`（dev pack + �
      `PlaywrightOffline-win-x64-*.zip` 已內含離線 NuGet feed。解壓後雙擊
      `點擊兩下-完整安裝(推薦).cmd`，會把 `Microsoft.Playwright`、
      `Microsoft.Playwright.NUnit`、`Microsoft.NET.Test.Sdk`、NUnit、MSTest
-     等 .nupkg **複製到 Microsoft 既有的全機器離線 feed 資料夾**
-     (`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages`)，並在
+     等 .nupkg **複製到 NuGet 預設的使用者 package 資料夾**
+      (`%USERPROFILE%\.nuget\packages`)，並在
      `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source，**並且預設停用
      `nuget.org`**（嚴格離線；確保 `dotnet add package` 不會偷打 api.nuget.org
      查 latest version）。之後任何新專案 `dotnet add package Microsoft.Playwright`
@@ -391,8 +391,8 @@ A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://do
 A：`app/` 是 self-contained 的 runtime 範例程式（.NET + Playwright driver +
 系統 Edge）；`nuget/` 是離線 NuGet feed（26 個 .nupkg，含
 Microsoft.Playwright、NUnit、MSTest 等）。雙擊 `點擊兩下-完整安裝(推薦).cmd` 會把
-`app/` 內容裝到 `C:\Program Files\PlaywrightApp\`、把 `nuget/` 內容散到
-`%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages` 並註冊機器層 NuGet source。
+`app/` 內容裝到 `C:\Program Files\PlaywrightApp\`、把 `nuget/` 內容放到
+`%USERPROFILE%\.nuget\packages` 並註冊機器層 NuGet source。
 之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。
 只想裝其中一邊？runtime 雙擊 `點擊兩下-僅安裝Runtime.cmd`，dev pack 執行
 `setup-devpack.ps1`。

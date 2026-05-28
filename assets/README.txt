@@ -54,8 +54,8 @@
   1. 在解壓出來的資料夾中，**雙擊「點擊兩下-完整安裝(推薦).cmd」**。
   2. UAC 提權視窗出現時按「是」。
   3. 腳本會：
-        - 把所有 .nupkg 複製到 Microsoft 標準離線 feed 資料夾
-          (%ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages)
+        - 把所有 .nupkg 複製到 NuGet 預設的使用者 package 資料夾
+          (%USERPROFILE%\.nuget\packages)
         - 在機器層 NuGet.Config 加一條 PlaywrightOfflineFeed 來源
           （備份既有檔案為 .bak.YYYYMMDD-HHMMSS），預設停用 nuget.org
         - 設機器層環境變數
@@ -115,9 +115,8 @@
   在原解壓資料夾，**雙擊「點擊兩下-解除安裝.cmd」**，會：
 
     - 從機器層 NuGet.Config 移除 PlaywrightOfflineFeed 來源
-    - 依 INDEX.txt 清單刪掉我們塞進去的 .nupkg（不會誤刪其他 Microsoft
-      既有的 offline 套件）
-    - **不**清 %USERPROFILE%\.nuget\packages（其他專案可能仍在用）
+    - 依 INDEX.txt 清單只刪掉我們塞進去的 .nupkg（不會誤刪其他
+      NuGet cache 內容）
     - 清環境變數 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD / PLAYWRIGHT_BROWSERS_PATH
     - 順手清掉 v0.5.x 留下的 C:\Program Files\PlaywrightApp 與其捷徑
 
@@ -148,9 +147,8 @@
           之後就會回到離線 feed + nuget.org 混合模式。
 
   * 想在 Visual Studio 看到這些套件
-        - VS 預設就把 %ProgramFiles(x86)%\Microsoft SDKs\NuGetPackages 視為
-          來源，[管理 NuGet 套件] → 來源選 "Microsoft Visual Studio Offline
-          Packages" 即可。
+        - setup.ps1 會把 PlaywrightOfflineFeed 註冊到機器層 NuGet.Config，
+          [管理 NuGet 套件] → 來源選 "PlaywrightOfflineFeed" 即可。
 
 
 重新安裝 / 升級
@@ -158,6 +156,6 @@
   直接再執行一次「點擊兩下-完整安裝(推薦).cmd」即可，**不需要**先解除安裝。
 
   - 讀取上次留下的 sentinel（PlaywrightOfflineFeed.INDEX.txt），
-    只刪掉「同 package id 但不同版本」的舊 .nupkg；其他 Microsoft offline
-    套件一律不動。
+    只刪掉「同 package id 但不同版本或舊版佈局」的舊 .nupkg；其他
+    NuGet cache 內容一律不動。
   - 若偵測到舊版 v0.5.x 的 C:\Program Files\PlaywrightApp\，會一併清掉。

@@ -266,8 +266,9 @@ jobs:
         run: |
           Write-Host 'Running setup.ps1 (runner is already admin)...'
           ./setup.ps1
-          $feed = Join-Path ${Env:ProgramFiles(x86)} 'Microsoft SDKs\NuGetPackages'
-          if (-not (Test-Path (Join-Path $feed 'microsoft.playwright.1.60.0.nupkg'))) {
+          $feed = Join-Path $Env:USERPROFILE '.nuget\packages'
+          $playwrightPackage = Join-Path $feed 'microsoft.playwright.1.60.0.nupkg'
+          if (-not (Test-Path $playwrightPackage)) {
             throw "setup.ps1 ran but Microsoft.Playwright.1.60.0.nupkg is missing from $feed"
           }
           Write-Host '✓ Dev pack installation completed.'
