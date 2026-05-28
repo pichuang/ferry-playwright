@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-28
+
 ### Documentation
 - README: new section **「想在這台機器寫自己的 Playwright 測試？」** with
   step-by-step guides for VS Code, Visual Studio, and PowerShell. Explains
