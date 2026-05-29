@@ -10,7 +10,7 @@
 
 | 項目 | 版本 |
 | --- | --- |
-| ferry-playwright | **v0.6.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
+| ferry-playwright | **v0.7.0**（最新 release；可能含尚未發布的變更，見 [CHANGELOG.md](CHANGELOG.md)） |
 | Microsoft.Playwright (.NET) | **1.60.0** |
 | .NET runtime / SDK | **.NET 10**（SDK pin `10.0.100`，`allowPrerelease: true`） |
 | 目標作業系統 | Windows 11 / Windows Server 2022（build ≥ 17763） |
@@ -30,7 +30,7 @@
 - 你不想讓 Playwright 在每台機器上下載 ~500MB 的 Chromium / Firefox。
 - 你要把 .NET 應用 + Playwright 環境用「一個 ZIP + 一鍵安裝」交付給客戶 / IT。
 
-把產生的 ZIP 用 USB 拷貝過去 → 解壓 → 雙擊 `點擊兩下-完整安裝(推薦).cmd` → 結束。不需要 internet、不需要 .NET SDK、不需要安裝 Edge（系統已內建）。
+把產生的 ZIP 用 USB 拷貝過去 → 解壓 → 雙擊 `點擊兩下-完整安裝(推薦).cmd` → 結束。不需要 internet、不需要安裝 Edge（系統已內建）。**.NET 10 SDK** 需另行準備（離線安裝檔）才能 build/跑範例。
 
 ---
 
@@ -41,21 +41,21 @@
 | 作業系統 | Windows 11 / Windows Server 2022 或更新 |
 | 瀏覽器 | Microsoft Edge（兩種系統都預載） |
 | 權限 | 安裝時需要本機 Administrator |
-| 網路 | **不需要** |
-| .NET | **不需要**（已嵌在安裝包） |
+| 網路 | **不需要**（安裝、build sample、跑 Playwright 全程離線） |
+| .NET | 需要 **.NET 10 SDK**（用來 build sample 或自己的測試；dev pack 只供 NuGet 套件） |
 
 ---
 
 ## 給「拿到 ZIP」的人：怎麼安裝
 
 > 從 **v0.6.0** 起，ZIP 內容改為「離線 NuGet feed + 三個 sample 原始碼專案」，
-> **不再包含** 預編譯的 `PlaywrightSampleApp.exe`。如果你想看一個完整的
+> **不再包含** 預編譯的 `FerryPlaywright.SampleApp.exe`。如果你想看一個完整的
 > Playwright + Edge 範例，請直接看解壓後的 `samples/hello-nunit`、
 > `samples/hello-mstest` 或 `samples/hello-console`。
 
 ### 一鍵安裝（dev pack）
 
-1. 把 `PlaywrightOffline-vX.Y.Z-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
+1. 把 `ferry-playwright-vX.Y.Z-win-x64-YYYYMMDD-HHMMSS.zip` 拷到目標機，解壓縮。
 2. 進入解壓後的資料夾，**雙擊** `點擊兩下-完整安裝(推薦).cmd`。
 3. 接受 UAC 提權對話框（只會問一次）。
 4. 看到「Dev pack installed.」即完成。
@@ -64,7 +64,7 @@
 
 - 把所有 `.nupkg` 複製到 `%USERPROFILE%\.nuget\packages`
   （NuGet 預設的使用者 package 位置）
-- 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條 `PlaywrightOfflineFeed` 來源
+- 在 `%ProgramData%\NuGet\NuGet.Config` 註冊一條 `ferry-playwright-feed` 來源
   （舊檔備份為 `.bak.YYYYMMDD-HHMMSS`），預設停用 `nuget.org`（嚴格離線）
 - 設機器層環境變數 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` /
   `PLAYWRIGHT_BROWSERS_PATH=0`，讓 Playwright 永遠不嘗試下載 Chromium
@@ -82,9 +82,9 @@ dotnet test --settings .runsettings
 > 進階：`setup.ps1 -KeepNuGetOrg` 可在保留 nuget.org 作為 fallback 的情況下安裝
 > （適合有間歇性網路的機器）。
 
-### 跑範例（runtime 部分）
+### 跑範例
 
-> v0.6.0 起 ZIP 不再附 `PlaywrightSampleApp.exe`。要看一個「會跑起來的範例」，
+> v0.6.0 起 ZIP 不再附 `FerryPlaywright.SampleApp.exe`。要看一個「會跑起來的範例」，
 > 請直接用 `samples/hello-console`：
 
 ```powershell
@@ -120,7 +120,7 @@ dotnet add package Microsoft.Playwright.NUnit
 
 直接執行新版 ZIP 內的 `點擊兩下-完整安裝(推薦).cmd` 即可，**不需要**先解除安裝。腳本會自動：
 
-- dev pack 部分會讀取上次留下的 sentinel `PlaywrightOfflineFeed.INDEX.txt`，**只刪掉同 package id
+- dev pack 部分會讀取上次留下的 sentinel `ferry-playwright-feed.INDEX.txt`，**只刪掉同 package id
   但不同版本或舊版佈局的 .nupkg**，再放入新版；其他 NuGet cache 內容一律不動。
 - 若偵測到舊版（v0.5.x）的 `C:\Program Files\PlaywrightApp\`，會順手清掉。
 
@@ -139,10 +139,10 @@ dotnet add package Microsoft.Playwright.NUnit
 ```bash
 git clone https://github.com/pichuang/ferry-playwright.git
 cd ferry-playwright
-dotnet run --project src/PlaywrightOfflinePackager
+dotnet run --project src/FerryPlaywright.OfflinePackager
 ```
 
-ZIP 會出現在 `output/PlaywrightOffline-vX.Y.Z-win-x64-*.zip`（dev pack + 三個 sample 原始碼，
+ZIP 會出現在 `output/ferry-playwright-vX.Y.Z-win-x64-*.zip`（dev pack + 三個 sample 原始碼，
 約 280 MB；其中 Microsoft.Playwright 套件本身就佔大宗），把它拷給目標機就好。
 
 > 進一步的打包選項、自訂應用、CI 自動發布、架構說明，請參考 **[DEVELOPER.md](DEVELOPER.md)**。
@@ -156,7 +156,7 @@ ZIP 會出現在 `output/PlaywrightOffline-vX.Y.Z-win-x64-*.zip`（dev pack + �
 
 ### 前置作業（一次性）
 
-1. **安裝 .NET 10 SDK**（這份 ZIP 只內含執行用 runtime，沒有 SDK）。
+1. **安裝 .NET 10 SDK**（這份 ZIP 不含 SDK）。
    - 官方下載：<https://dotnet.microsoft.com/download>
    - 若這台機器**完全沒有網路**，請從另一台有網路的機器下載 SDK 安裝檔，
      再 sneakernet 過來；或在貴公司內部 NuGet/檔案伺服器準備離線安裝檔。
@@ -164,25 +164,28 @@ ZIP 會出現在 `output/PlaywrightOffline-vX.Y.Z-win-x64-*.zip`（dev pack + �
    `dotnet add package Microsoft.Playwright` 預設會打 `api.nuget.org` 而失敗。
    有兩種解法：
 
-   - **（推薦）使用我們的 ZIP 一鍵裝完** — 同一個 release 的
-     `PlaywrightOffline-win-x64-*.zip` 已內含離線 NuGet feed。解壓後雙擊
+   - **（推薦）用本專案 ZIP 一鍵裝完** — 解壓後雙擊
      `點擊兩下-完整安裝(推薦).cmd`，會把 `Microsoft.Playwright`、
      `Microsoft.Playwright.NUnit`、`Microsoft.NET.Test.Sdk`、NUnit、MSTest
      等 .nupkg **複製到 NuGet 預設的使用者 package 資料夾**
       (`%USERPROFILE%\.nuget\packages`)，並在
-     `%ProgramData%\NuGet\NuGet.Config` 註冊一條 source，**並且預設停用
-     `nuget.org`**（嚴格離線；確保 `dotnet add package` 不會偷打 api.nuget.org
-     查 latest version）。之後任何新專案 `dotnet add package Microsoft.Playwright`
-     都會走離線 feed。若想保留 nuget.org 當 fallback，安裝時加 `-KeepNuGetOrg`。
-     （只想裝 NuGet feed、不裝範例 runtime 也行：執行
-     `powershell -ExecutionPolicy Bypass -File .\setup-devpack.ps1` 即可。）
+     `%ProgramData%\NuGet\NuGet.Config` 註冊一條 `ferry-playwright-feed` source，
+     **預設停用 `nuget.org`**（嚴格離線；確保 `dotnet add package` 不會偷打
+     api.nuget.org 查 latest version）。之後任何新專案
+     `dotnet add package Microsoft.Playwright` 都會走離線 feed。若想保留
+     nuget.org 當 fallback，安裝時加 `-KeepNuGetOrg`。
    - 或自行帶整個 `~/.nuget/packages` 過來，或自建內網 NuGet 私服。
-3. **確認環境變數已套用**（雙擊 setup.cmd 後會設好）：
+3. **確認環境變數已套用**（雙擊安裝後會設好）：
    ```powershell
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD','Machine')  # → 1
    [Environment]::GetEnvironmentVariable('PLAYWRIGHT_BROWSERS_PATH','Machine')         # → 0
    ```
    有了這兩個，新專案執行時就**不會**嘗試下載 Chromium，會走系統 Edge。
+
+> 後文範例假設你把 ZIP 解壓在 `C:\ferry-playwright\`；如果你解壓在別處，
+> 請把 `C:\ferry-playwright\` 換成你的實際路徑。Helper script
+> (`new-playwright-project.ps1`) 與 `NuGet.config.template` 直接放在解壓資料夾根目錄，
+> 不會複製到 `%ProgramFiles%`。
 
 ### 核心模式：永遠用系統 Edge
 
@@ -202,21 +205,21 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 1. 安裝擴充套件：
    - **C# Dev Kit**（Microsoft 官方，含 IntelliSense + Test Explorer）
    - 選用：**Playwright Test for VSCode**（如果你之後想加 trace viewer 整合）
-2. 用我們的 helper 建立離線 NUnit 測試專案（**強烈推薦**，避開所有 NuGet 雷區）：
+2. 用 ZIP 內附的 helper 建立離線 NUnit 測試專案（**強烈推薦**，避開所有 NuGet 雷區）：
    ```powershell
-   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwTests
+   & "C:\ferry-playwright\new-playwright-project.ps1" -Name MyPwTests
    cd MyPwTests
    code .
    ```
    > Helper 會在新專案根目錄寫一份 `NuGet.config`，內含 `<clear />` 把所有繼承
-   > 的 NuGet source 都清掉，只留 PlaywrightOfflineFeed；接著用**鎖定的版本**
+   > 的 NuGet source 都清掉，只留 ferry-playwright-feed；接著用**鎖定的版本**
    > 跑 `dotnet new nunit` + `dotnet add package`，所以無論你的個人 / 機器 / 公司
    > 層 NuGet 設定有多奇怪、`dotnet new nunit` 模板想抓哪個版本，全部都會走離線。
 3. 若你**堅持手動**用 `dotnet new nunit; dotnet add package ...`，請先在新專案根
    目錄複製一份 `NuGet.config.template` 改名成 `NuGet.config`：
    ```powershell
    mkdir MyPwTests; cd MyPwTests
-   Copy-Item "$Env:ProgramFiles\PlaywrightApp\NuGet.config.template" .\NuGet.config
+   Copy-Item "C:\ferry-playwright\NuGet.config.template" .\NuGet.config
    dotnet new nunit
    dotnet add package Microsoft.Playwright       --version 1.60.0
    dotnet add package Microsoft.Playwright.NUnit --version 1.60.0
@@ -274,13 +277,13 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 
 1. 用 helper 先建專案再用 VS 開：
    ```powershell
-   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwTests
+   & "C:\ferry-playwright\new-playwright-project.ps1" -Name MyPwTests
    ```
    然後 VS：**File → Open → Project/Solution**，選 `MyPwTests\MyPwTests.csproj`。
    （這樣可以保證 project-local `NuGet.config` 已就位，VS 的 NuGet 還原也只會
-   看到 PlaywrightOfflineFeed。）
+   看到 ferry-playwright-feed。）
 2. 如果你**從 VS New Project 對話框**建，記得：建完後**立刻**
-   把 `%ProgramFiles%\PlaywrightApp\NuGet.config.template` 複製到專案根目錄
+   把 `C:\ferry-playwright\NuGet.config.template` 複製到專案根目錄
    改名 `NuGet.config`，再開始 Manage NuGet Packages，否則 VS 預設仍會嘗試
    `api.nuget.org`。
 3. 把預設測試類別內容換成上面 VS Code 段落裡的 `HelloTests` 範例。
@@ -294,7 +297,7 @@ await using var browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOpt
 最快路徑是用 helper 跑 console 模板：
 
 ```powershell
-& "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyPwScript -Template console
+& "C:\ferry-playwright\new-playwright-project.ps1" -Name MyPwScript -Template console
 cd MyPwScript
 # 把 Program.cs 換成下面內容，然後：
 dotnet run
@@ -304,7 +307,7 @@ dotnet run
 
 ```powershell
 mkdir MyPwScript; cd MyPwScript
-Copy-Item "$Env:ProgramFiles\PlaywrightApp\NuGet.config.template" .\NuGet.config
+Copy-Item "C:\ferry-playwright\NuGet.config.template" .\NuGet.config
 dotnet new console
 dotnet add package Microsoft.Playwright --version 1.60.0
 ```
@@ -352,50 +355,53 @@ result: Hello from PowerShell!
 `The SSL connection could not be established` / `received an unexpected EOF`？**
 A：你的個人 NuGet 設定（`%AppData%\Roaming\NuGet\NuGet.Config`）或公司
 group policy 帶進了**其他 remote NuGet source**（例如內部 Azure DevOps feed），
-即便 v0.5.2 把 `nuget.org` 停用，dotnet 還是會把它們打一輪。
+即便我們把 `nuget.org` 停用，dotnet 還是會把它們打一輪。
 **解法**：直接用我們的 helper：
 ```powershell
-& "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
+& "C:\ferry-playwright\new-playwright-project.ps1" -Name MyTests
 ```
-它會在新專案根目錄放一份 `NuGet.config`（`<clear />` + 只有 PlaywrightOfflineFeed），
+它會在新專案根目錄放一份 `NuGet.config`（`<clear />` + 只有 ferry-playwright-feed），
 不管任何上層設定都會被蓋掉。或是手動把
-`%ProgramFiles%\PlaywrightApp\NuGet.config.template` 複製到專案根目錄改名
+`C:\ferry-playwright\NuGet.config.template` 複製到專案根目錄改名
 `NuGet.config`，效果一樣。
 
-**Q：安裝時跳出「Microsoft Edge was not detected」怎麼辦？**
-A：Windows 11 / Server 2022 預設都有 Edge；若被特殊映像移除，可重新安裝 Edge，
-或在很確定 Edge 存在時用 `install.ps1 -SkipEdgeCheck` 略過檢查。
-
-**Q：第一次執行 .exe 跳出 SmartScreen 警告？**
-A：這個範例 binary 沒有經過程式碼簽章。點「其他資訊」→「仍要執行」即可；
-若是企業環境，請用你們的 code-signing 憑證對 ZIP 內的 .exe 簽章後再分發。
+**Q：第一次跑 sample 跳出 SmartScreen 警告？**
+A：sample 跑起來會去 launch 系統 Edge；Edge 本身已經是受信任的 binary，多半不會觸發。
+若是你自己 build 的 `.exe`（未經程式碼簽章），SmartScreen 首次執行會跳警告：
+點「其他資訊」→「仍要執行」即可；企業環境請用 code-signing 憑證自行簽章。
 
 **Q：怎麼確認真的沒上網？**
 A：本專案的 GitHub Actions 在每次 release 前會把 Windows runner 的網路用
-防火牆封鎖，然後跑一次完整安裝 + 啟動，並比對 TCP 連線快照確認沒有任何
-外連產生。詳見 [DEVELOPER.md](DEVELOPER.md#ci--release-workflow)。
+防火牆封鎖，然後跑一次完整安裝 + `dotnet build samples\hello-console`，並比對 TCP
+連線快照確認沒有任何外連產生。詳見 [DEVELOPER.md](DEVELOPER.md#ci--release-workflow)。
 
 **Q：我已經有 Playwright 自動化專案，可以換掉裡面的範例嗎？**
 A：可以。見 [DEVELOPER.md → 客製化](DEVELOPER.md#客製化換成自己的應用)。
 
 **Q：可以用這份安裝來「寫」新的測試嗎？**
 A：可以。要寫新測試請先安裝 .NET 10 SDK（[官網下載](https://dotnet.microsoft.com/download)）；
-   ZIP 內的 dev pack 部分（雙擊 `點擊兩下-完整安裝(推薦).cmd` 一鍵裝完，或單獨執行
+   ZIP 內的 dev pack（雙擊 `點擊兩下-完整安裝(推薦).cmd`，或單獨執行
    `setup-devpack.ps1`）會把 .nupkg 放進機器層離線 NuGet feed，
    解決 NuGet 套件下載問題。詳細步驟見上面
 「[想在這台機器寫自己的 Playwright 測試？](#想在這台機器寫自己的-playwright-測試)」章節。
 我們安裝時設好的環境變數會自動套用到所有新專案，所以只要 launch 時用
 `Channel = "msedge"` 就能離線跑。
 
-**Q：ZIP 裡的 `app/` 跟 `nuget/` 各是什麼？**
-A：`app/` 是 self-contained 的 runtime 範例程式（.NET + Playwright driver +
-系統 Edge）；`nuget/` 是離線 NuGet feed（26 個 .nupkg，含
-Microsoft.Playwright、NUnit、MSTest 等）。雙擊 `點擊兩下-完整安裝(推薦).cmd` 會把
-`app/` 內容裝到 `C:\Program Files\PlaywrightApp\`、把 `nuget/` 內容放到
-`%USERPROFILE%\.nuget\packages` 並註冊機器層 NuGet source。
-之後任何專案 `dotnet add package Microsoft.Playwright` 都不需要網路。
-只想裝其中一邊？runtime 雙擊 `點擊兩下-僅安裝Runtime.cmd`，dev pack 執行
-`setup-devpack.ps1`。
+**Q：ZIP 解壓後裡面有什麼？**
+A：v0.6 起 ZIP 內容是純粹的「dev pack + sample 原始碼」，沒有預編譯 runtime：
+
+- `nuget/` — 離線 NuGet feed（~30 個 .nupkg，含 Microsoft.Playwright 1.60.0、
+  Microsoft.Playwright.NUnit/.MSTest、Microsoft.NET.Test.Sdk、NUnit、MSTest、
+  以及它們的傳遞性相依），雙擊安裝會放進 `%USERPROFILE%\.nuget\packages` 並
+  在 `%ProgramData%\NuGet\NuGet.Config` 註冊 `ferry-playwright-feed` source。
+- `samples/{hello-nunit, hello-mstest, hello-console}/` — 三個可立即 build/test
+  的範例專案（NUnit + Playwright fixture、MSTest + Playwright fixture、
+  純 console 應用），各自含 `NuGet.config` 走 ferry-playwright-feed。
+- 雙擊入口腳本：`點擊兩下-完整安裝(推薦).cmd` / `點擊兩下-解除安裝.cmd`。
+- 進階 ps1：`setup.ps1` / `setup-devpack.ps1` / `uninstall.ps1` /
+  `uninstall-devpack.ps1`。
+- Helper：`new-playwright-project.ps1` + `NuGet.config.template`。
+- 紀錄檔：`README.txt` / `VERSION.txt` / `BUILD-INFO.txt`。
 
 ---
 

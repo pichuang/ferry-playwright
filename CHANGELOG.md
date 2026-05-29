@@ -7,16 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-29
+
 ### Changed
 - Dev-pack setup now places bundled `.nupkg` files under the user's default
   NuGet package location (`%USERPROFILE%\.nuget\packages`) instead of the
   machine-wide Visual Studio offline package folder, while still registering
-  `PlaywrightOfflineFeed` for strict offline restores.
+  `ferry-playwright-feed` for strict offline restores.
+
+### Changed (rebrand)
+- **Rebranded the entire codebase to `ferry-playwright`** for a clearer,
+  repo-aligned identity. No functional / behaviour change beyond renames.
+- .NET projects renamed:
+  - `src/PlaywrightSampleApp/` → `src/FerryPlaywright.SampleApp/`
+    (assembly + namespace + exe → `FerryPlaywright.SampleApp`)
+  - `src/PlaywrightOfflinePackager/` → `src/FerryPlaywright.OfflinePackager/`
+- ZIP filename: `PlaywrightOffline-v*-<rid>-<ts>.zip` → `ferry-playwright-v*-<rid>-<ts>.zip`.
+- NuGet source name: `PlaywrightOfflineFeed` → `ferry-playwright-feed` (in machine
+  `NuGet.Config`, bundled `NuGet.config.template`, sample templates).
+- Dev pack sentinel: `PlaywrightOfflineFeed.INDEX.txt` → `ferry-playwright-feed.INDEX.txt`.
+
+### Backward compatibility
+- `setup-devpack.ps1` / `uninstall-devpack.ps1` also detect and clean up the
+  v0.6.x `PlaywrightOfflineFeed` NuGet source key and `PlaywrightOfflineFeed.INDEX.txt`
+  sentinel during upgrade / uninstall — no manual cleanup required.
+- `setup.ps1` / `uninstall.ps1` still best-effort remove the v0.5.x
+  `%ProgramFiles%\PlaywrightApp\` folder + its shortcuts.
+
+### Migration
+- Upgrading from v0.6.x: just run `點擊兩下-完整安裝(推薦).cmd` from the new ZIP.
+  The dev-pack installer will overwrite the source key in machine `NuGet.Config`
+  and clean up the old sentinel automatically. No project changes required for
+  consumers, but if you copied `NuGet.config.template` into your own project,
+  update the `<add key=…>` to `ferry-playwright-feed` so the source name matches
+  the machine config.
 
 ## [0.6.0] - 2026-05-28
 
 ### BREAKING
-- **ZIP no longer contains a precompiled `PlaywrightSampleApp.exe`** under
+- **ZIP no longer contains a precompiled `FerryPlaywright.SampleApp.exe`** under
   `app/`. The "runtime" portion of the package has been removed because the
   binary on its own has little reference value for users learning to write
   offline Playwright projects.
@@ -41,10 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all outbound traffic firewalled.
 
 ### Changed
-- `src/PlaywrightSampleApp/` is retained in the repo (so the codebase
+- `src/FerryPlaywright.SampleApp/` is retained in the repo (so the codebase
   still builds end-to-end) but the packager no longer publishes or
   bundles it.
-- ZIP filename format unchanged: `PlaywrightOffline-vX.Y.Z-win-x64-<ts>.zip`.
+- ZIP filename format unchanged: `ferry-playwright-vX.Y.Z-win-x64-<ts>.zip`.
 
 ### Migration from v0.5.x
 1. Unzip the new release.
@@ -83,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   & "$Env:ProgramFiles\PlaywrightApp\new-playwright-project.ps1" -Name MyTests
   ```
   Supports `-Template nunit | mstest | console`. The helper drops a project-local
-  `NuGet.config` with `<clear />` + only `PlaywrightOfflineFeed`, runs
+  `NuGet.config` with `<clear />` + only `ferry-playwright-feed`, runs
   `dotnet new <template> --no-restore`, then `dotnet add package` with versions
   pinned to what the dev pack actually bundles (Playwright 1.60.0, NUnit 4.2.2,
   MSTest 3.6.4, Test.Sdk 17.11.1), then `dotnet restore`. Fully offline.
@@ -140,7 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `Upgrading vOLD -> vNEW` / `Reinstalling` / `Downgrade warning` /
     `Fresh install` banners.
   - `setup-devpack.ps1` writes a sentinel
-    `<FeedDir>\PlaywrightOfflineFeed.INDEX.txt` listing every `.nupkg` it
+    `<FeedDir>\ferry-playwright-feed.INDEX.txt` listing every `.nupkg` it
     deployed. On the next install, packages whose id is in the new bundle but
     whose version differs are removed before the new files are copied — so
     obsolete versions don't accumulate. Other Microsoft offline packages (e.g.
@@ -151,14 +180,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packager accepts `--version <semver>` (or `PACKAGE_VERSION` env var, or
   `git describe --tags` fallback) and stamps it into `VERSION.txt`,
   `BUILD-INFO.txt`, the dev pack `INDEX.txt` header, and the produced ZIP
-  filename (`PlaywrightOffline-v<ver>-<rid>-<timestamp>.zip`).
+  filename (`ferry-playwright-v<ver>-<rid>-<timestamp>.zip`).
 - Release workflow passes `PACKAGE_VERSION` to the packager (from the git tag
   on tag builds) so every release ZIP carries the matching version string.
 
 ### Changed
 - **BREAKING (packaging)**: collapsed the two release artifacts
-  (`PlaywrightOffline-*.zip` runtime + `PlaywrightDevPack-*.zip` dev pack) into
-  a **single** `PlaywrightOffline-*.zip` (~350 MB) containing both `app/`
+  (`ferry-playwright-*.zip` runtime + `ferry-playwright-devpack-*.zip` dev pack) into
+  a **single** `ferry-playwright-*.zip` (~350 MB) containing both `app/`
   (runtime) and `nuget/` (offline NuGet feed). Removed the `--devpack` packager
   flag — the combined ZIP is always produced.
 - New top-level entry script **`setup.ps1`** / **`點擊兩下-完整安裝(推薦).cmd`** runs
@@ -174,7 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runtime portion (dev pack would make invasive machine-level changes).
 
 ### Removed
-- Standalone `PlaywrightDevPack-*.zip` artifact (contents merged into the
+- Standalone `ferry-playwright-devpack-*.zip` artifact (contents merged into the
   combined ZIP).
 - `assets-devpack/點擊兩下-setup-devpack.cmd` and
   `assets-devpack/點擊兩下-uninstall-devpack.cmd` (advanced users can call the
@@ -231,7 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-05-28
 
 ### Added
-- Hello-World self-test embedded in `PlaywrightSampleApp`: navigates to a
+- Hello-World self-test embedded in `FerryPlaywright.SampleApp`: navigates to a
   built-in `data:` URL with a "Hello, Playwright!" page, asserts the page
   title, DOM text content, and a JS-evaluated value, then prints a clear
   `RESULT: PASS` / `RESULT: FAIL` line and exits with the matching code.
@@ -245,11 +274,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release of the offline Playwright packager.
-- `PlaywrightSampleApp` (.NET 10 console) that launches the system-installed
+- `FerryPlaywright.SampleApp` (.NET 10 console) that launches the system-installed
   Microsoft Edge via Playwright (`Channel="msedge"`) — no browser downloads needed.
 - CI mode in the sample app (`--ci` or `CI=true`): headless, non-interactive,
   defaults to `about:blank` for offline smoke testing.
-- `PlaywrightOfflinePackager` (.NET 10 console) that produces a self-contained
+- `FerryPlaywright.OfflinePackager` (.NET 10 console) that produces a self-contained
   `win-x64` ZIP bundle including:
   - The published application with embedded .NET runtime
   - Playwright's Node driver (`.playwright/node/win32_x64/node.exe`)

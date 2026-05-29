@@ -37,7 +37,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host ''
 Write-Host '================================================================' -ForegroundColor Cyan
-Write-Host ' Playwright Offline — uninstall'                                  -ForegroundColor Cyan
+Write-Host ' ferry-playwright Offline — uninstall'                             -ForegroundColor Cyan
 Write-Host '================================================================' -ForegroundColor Cyan
 Write-Host ''
 

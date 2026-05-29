@@ -59,14 +59,14 @@ jobs:
       - name: Run packager
         env:
           PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
-        run: dotnet run --project src/PlaywrightOfflinePackager -c Release
+        run: dotnet run --project src/FerryPlaywright.OfflinePackager -c Release
 
       - name: Locate ZIP and compute SHA256
         id: locate
         shell: bash
         run: |
           set -euo pipefail
-          ZIP=$(ls -t output/PlaywrightOffline-*.zip | head -1)
+          ZIP=$(ls -t output/ferry-playwright-*.zip | head -1)
           if [[ -z "$ZIP" ]]; then
             echo "::error::No ZIP produced under output/"
             exit 1
@@ -146,7 +146,7 @@ jobs:
             echo "- Double-click \`點擊兩下-完整安裝(推薦).cmd\` to install the dev pack."
             echo "  Then copy one of \`samples/\` to your working directory and run \`dotnet test --settings .runsettings\` (or \`dotnet run\`)."
             echo ""
-            echo "**Breaking change vs v0.5.x**: ZIP no longer contains a precompiled \`PlaywrightSampleApp.exe\`. Sample projects replace it as the reference. \`install.ps1\` / \`uninstall-runtime.ps1\` / the \`點擊兩下-僅安裝Runtime.cmd\` launcher are removed."
+            echo "**Breaking change vs v0.5.x**: ZIP no longer contains a precompiled \`FerryPlaywright.SampleApp.exe\`. Sample projects replace it as the reference. \`install.ps1\` / \`uninstall-runtime.ps1\` / the \`點擊兩下-僅安裝Runtime.cmd\` launcher are removed."
             echo ""
             echo "## Self-test results"
             echo ""
@@ -188,7 +188,7 @@ jobs:
         with:
           name: offline-package
           path: |
-            output/PlaywrightOffline-*.zip
+            output/ferry-playwright-*.zip
             release-notes.md
           if-no-files-found: error
           retention-days: 14
@@ -227,7 +227,7 @@ jobs:
       - name: Extract ZIP
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Path artifact -Recurse -Filter 'PlaywrightOffline-*.zip' | Select-Object -First 1
+          $zip = Get-ChildItem -Path artifact -Recurse -Filter 'ferry-playwright-*.zip' | Select-Object -First 1
           if (-not $zip) { throw 'ZIP not found in artifact.' }
           Write-Host "Extracting $($zip.FullName)..."
           Expand-Archive -Path $zip.FullName -DestinationPath extracted -Force
@@ -404,7 +404,7 @@ jobs:
       - name: Move ZIP to flat path
         run: |
           set -euo pipefail
-          ZIP=$(find artifact -type f -name 'PlaywrightOffline-*.zip' | head -1)
+          ZIP=$(find artifact -type f -name 'ferry-playwright-*.zip' | head -1)
           NOTES=$(find artifact -type f -name 'release-notes.md' | head -1)
           if [[ -z "$ZIP" ]]; then echo "::error::ZIP not found in artifact"; exit 1; fi
           if [[ -z "$NOTES" ]]; then echo "::error::release-notes.md not found in artifact"; exit 1; fi
@@ -423,4 +423,4 @@ jobs:
           generate_release_notes: true
           body_path: release-assets/release-notes.md
           files: |
-            release-assets/PlaywrightOffline-*.zip
+            release-assets/ferry-playwright-*.zip

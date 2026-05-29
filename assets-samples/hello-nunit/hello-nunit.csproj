@@ -11,7 +11,7 @@
 
   <!--
     Versions pinned to whatever the offline dev pack actually bundles.
-    Keep in sync with src/PlaywrightOfflinePackager/Program.cs and
+    Keep in sync with src/FerryPlaywright.OfflinePackager/Program.cs and
     new-playwright-project.ps1 $Versions table.
   -->
   <ItemGroup>

@@ -4,6 +4,5 @@ output/
 *.user
 .vs/
 .vscode/*
-!.vscode/mcp.json
 .idea/
 *.zip

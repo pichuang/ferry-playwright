@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 
-// PlaywrightOfflinePackager (v0.6+)
+// FerryPlaywright.OfflinePackager (v0.7+)
 // 將離線 NuGet feed + 三個 sample 原始碼專案打包成單一 ZIP。
 //
 // ZIP 內容：
@@ -13,10 +13,10 @@ using System.Text;
 //   - new-playwright-project.ps1 / NuGet.config.template
 //   - README.txt / VERSION.txt / BUILD-INFO.txt
 //
-// 從 v0.6.0 起 ZIP 不再包含預編譯的 PlaywrightSampleApp.exe；範例改成
+// 從 v0.6.0 起 ZIP 不再包含預編譯的 FerryPlaywright.SampleApp.exe；範例改成
 // 提供原始碼，使用者照 samples/<name>/README.md 即可 build/test。
 //
-// 使用方式: dotnet run --project src/PlaywrightOfflinePackager
+// 使用方式: dotnet run --project src/FerryPlaywright.OfflinePackager
 //           -- [--rid win-x64] [--config Release] [--output output]
 
 string rid = "win-x64";
@@ -74,16 +74,16 @@ Directory.CreateDirectory(outputDir);
 string packageVersion = ResolvePackageVersion(repoRoot, versionOverride);
 
 string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-string stagingRoot = Path.Combine(Path.GetTempPath(), $"playwright-offline-{timestamp}");
+string stagingRoot = Path.Combine(Path.GetTempPath(), $"ferry-playwright-{timestamp}");
 string nugetStaging = Path.Combine(stagingRoot, "nuget");
 string samplesStaging = Path.Combine(stagingRoot, "samples");
-string devpackRestoreTmp = Path.Combine(Path.GetTempPath(), $"playwright-devpack-restore-{timestamp}");
+string devpackRestoreTmp = Path.Combine(Path.GetTempPath(), $"ferry-playwright-devpack-restore-{timestamp}");
 Directory.CreateDirectory(nugetStaging);
 Directory.CreateDirectory(samplesStaging);
 Directory.CreateDirectory(devpackRestoreTmp);
 
 Console.WriteLine("================================================================");
-Console.WriteLine(" Playwright Offline Packager (dev pack + sample sources)");
+Console.WriteLine(" ferry-playwright Offline Packager (dev pack + sample sources)");
 Console.WriteLine("================================================================");
 Console.WriteLine($" RID            : {rid}");
 Console.WriteLine($" Version        : {packageVersion}");
@@ -156,7 +156,7 @@ try
             }
         }
         var index = new StringBuilder();
-        index.AppendLine("# Playwright Offline Dev Pack — bundled .nupkg files");
+        index.AppendLine("# ferry-playwright Offline Dev Pack — bundled .nupkg files");
         index.AppendLine($"# Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}");
         index.AppendLine($"# PackageVersion: {packageVersion}");
         index.AppendLine($"# Count: {collected.Count}");
@@ -184,8 +184,8 @@ try
     Step("Write build metadata", () =>
     {
         var meta = $"""
-            Playwright Offline Package (dev pack + sample sources)
-            ======================================================
+            ferry-playwright Offline Package (dev pack + sample sources)
+            ============================================================
             Version       : {packageVersion}
             Built on      : {DateTime.Now:yyyy-MM-dd HH:mm:ss zzz}
             RID           : {rid}
@@ -194,7 +194,7 @@ try
                             samples/ (hello-nunit, hello-mstest, hello-console)
 
             From v0.6.0 onward this ZIP does NOT contain a precompiled
-            PlaywrightSampleApp.exe. Use the sample source projects under
+            FerryPlaywright.SampleApp.exe. Use the sample source projects under
             samples/ as the reference for building your own offline tests.
             """;
         File.WriteAllText(Path.Combine(stagingRoot, "BUILD-INFO.txt"), meta);
@@ -202,7 +202,7 @@ try
     });
 
     // STEP 7: zip
-    string zipName = $"PlaywrightOffline-v{packageVersion}-{rid}-{timestamp}.zip";
+    string zipName = $"ferry-playwright-v{packageVersion}-{rid}-{timestamp}.zip";
     string zipPath = Path.Combine(outputDir, zipName);
     Step("Create ZIP", () =>
     {
@@ -368,7 +368,7 @@ static string ResolvePackageVersion(string repoRoot, string? overrideVersion)
 
 static void PrintHelp()
 {
-    Console.WriteLine("Usage: dotnet run --project src/PlaywrightOfflinePackager -- [options]");
+    Console.WriteLine("Usage: dotnet run --project src/FerryPlaywright.OfflinePackager -- [options]");
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  --rid <id>              Runtime identifier (default: win-x64)");

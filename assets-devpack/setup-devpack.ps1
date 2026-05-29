@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Install the Playwright offline NuGet dev pack on Windows 11 / Windows Server 2022.
+    Install the ferry-playwright offline NuGet dev pack on Windows 11 / Windows Server 2022.
 
 .DESCRIPTION
     Copies bundled .nupkg files into the user's default NuGet package folder
@@ -26,7 +26,7 @@
 [CmdletBinding()]
 param(
     [string]$FeedDir = (Join-Path $env:USERPROFILE '.nuget\packages'),
-    [string]$SourceName = 'PlaywrightOfflineFeed',
+    [string]$SourceName = 'ferry-playwright-feed',
     [switch]$KeepNuGetOrg,
     [switch]$DisableNuGetOrg  # deprecated alias; offline-only is now the default
 )
@@ -62,7 +62,7 @@ function Invoke-SelfElevate {
 
 # ---------- entry ----------
 
-Write-Section 'Playwright Offline Dev Pack Installer'
+Write-Section 'ferry-playwright Offline Dev Pack Installer'
 
 if (-not (Test-IsAdmin)) { Invoke-SelfElevate }
 
@@ -94,8 +94,11 @@ function Get-NupkgIdVersion {
 }
 
 # Step 0 — clean up older versions of bundled package ids using sentinel left by previous install.
-$sentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$sentinelName = 'ferry-playwright-feed.INDEX.txt'
 $sentinelPath = Join-Path $FeedDir $sentinelName
+# v0.6.x sentinel filename — read it too so upgrades from v0.6 still clean correctly.
+$legacySentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$legacySentinelPath = Join-Path $FeedDir $legacySentinelName
 
 $newNupkgInfo = @($nupkgFiles | ForEach-Object { Get-NupkgIdVersion $_.Name } | Where-Object { $_ })
 if ($newNupkgInfo.Count -ne $nupkgFiles.Count) {
@@ -123,6 +126,27 @@ if (Test-Path $sentinelPath) {
         }
     }
     if ($removed -eq 0) { Write-Host ' Nothing to remove.' }
+}
+
+# Same cleanup against v0.6.x sentinel (legacy filename) — keep upgrades clean.
+if (Test-Path $legacySentinelPath) {
+    Write-Section 'Cleaning obsolete dev pack packages from v0.6.x install'
+    $previous = @(Get-Content $legacySentinelPath | Where-Object { $_ -and -not $_.StartsWith('#') })
+    $removed = 0
+    foreach ($prevFile in $previous) {
+        if ($newFileNames.ContainsKey($prevFile)) { continue }
+        $prevInfo = Get-NupkgIdVersion $prevFile
+        if ($null -eq $prevInfo) { continue }
+        if (-not $newIds.ContainsKey($prevInfo.Id)) { continue }
+        $oldPath = Join-Path $FeedDir $prevFile
+        if (Test-Path $oldPath) {
+            Remove-Item -Path $oldPath -Force
+            Write-Host (" - {0}" -f $prevFile)
+            $removed++
+        }
+    }
+    if ($removed -eq 0) { Write-Host ' Nothing to remove.' }
+    try { Remove-Item -Path $legacySentinelPath -Force } catch { }
 }
 
 # Step 1 — copy nupkgs to the user's default NuGet package folder
@@ -159,6 +183,16 @@ if (-not $packageSources) {
 # Idempotent add: remove any existing entry with the same key, then append.
 $existing = @($packageSources.SelectNodes("add[@key='$SourceName']"))
 foreach ($n in $existing) { $packageSources.RemoveChild($n) | Out-Null }
+
+# Also drop any legacy v0.6.x source key so we don't leave two entries pointing at the same folder.
+foreach ($legacyKey in @('PlaywrightOfflineFeed')) {
+    if ($legacyKey -eq $SourceName) { continue }
+    $legacyNodes = @($packageSources.SelectNodes("add[@key='$legacyKey']"))
+    foreach ($n in $legacyNodes) {
+        $packageSources.RemoveChild($n) | Out-Null
+        Write-Host " (cleanup)  : removed legacy NuGet source '$legacyKey'" -ForegroundColor DarkGray
+    }
+}
 
 $addEl = $cfg.CreateElement('add')
 $addEl.SetAttribute('key', $SourceName)
@@ -212,7 +246,7 @@ Write-Host ' PLAYWRIGHT_BROWSERS_PATH         = 0'
 $pkgVersionFile = Join-Path $scriptDir 'VERSION.txt'
 $pkgVersion = if (Test-Path $pkgVersionFile) { (Get-Content $pkgVersionFile -Raw).Trim() } else { 'unknown' }
 $sb = New-Object System.Text.StringBuilder
-[void]$sb.AppendLine('# PlaywrightOfflineFeed sentinel — files written by setup-devpack.ps1')
+[void]$sb.AppendLine('# ferry-playwright-feed sentinel — files written by setup-devpack.ps1')
 [void]$sb.AppendLine('# Do NOT edit by hand. Used by uninstall-devpack.ps1 and upgrade cleanup.')
 [void]$sb.AppendLine("# PackageVersion: $pkgVersion")
 [void]$sb.AppendLine("# Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')")
@@ -221,7 +255,7 @@ Set-Content -Path $sentinelPath -Value $sb.ToString() -Encoding UTF8
 Write-Host (" Sentinel   : {0}" -f $sentinelPath)
 
 Write-Section 'Dev pack installed'
-Write-Host ' You can now write Playwright tests on this offline machine. Try:' -ForegroundColor Green
+Write-Host ' You can now write ferry-playwright tests on this offline machine. Try:' -ForegroundColor Green
 Write-Host ''
 Write-Host '   mkdir hello-playwright; cd hello-playwright'
 Write-Host '   dotnet new nunit'

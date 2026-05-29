@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Creates a new project directory, drops a project-local NuGet.config with
-    `<clear />` + only the PlaywrightOfflineFeed, runs `dotnet new`, then adds
+    `<clear />` + only the ferry-playwright-feed, runs `dotnet new`, then adds
     Playwright + test-framework packages **pinned to the versions actually
     bundled** in the dev pack. This sidesteps both of the failure modes that
     plain `dotnet new nunit; dotnet add package Microsoft.Playwright.NUnit`
@@ -59,7 +59,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Bundled versions — keep in sync with the package list pinned in
-# src/PlaywrightOfflinePackager/Program.cs (synthesized shell csproj).
+# src/FerryPlaywright.OfflinePackager/Program.cs (synthesized shell csproj).
 $Versions = @{
     'Microsoft.Playwright'        = '1.60.0'
     'Microsoft.Playwright.NUnit'  = '1.60.0'
@@ -91,7 +91,7 @@ if (-not (Test-Path $tmpl)) {
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if (-not $dotnet) {
     throw "dotnet SDK not found on PATH. Install .NET 10 SDK first " +
-          "(this offline ZIP only contains the runtime needed by PlaywrightSampleApp.exe)."
+          "(this offline ZIP only contains the runtime needed by ferry-playwright samples)."
 }
 
 # 3) Compute target dir.
@@ -107,7 +107,7 @@ if (Test-Path $projectDir) {
 New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
 Write-Host ''
 Write-Host '================================================================' -ForegroundColor Cyan
-Write-Host (' New Playwright offline project: {0}' -f $Name)                  -ForegroundColor Cyan
+Write-Host (' New ferry-playwright offline project: {0}' -f $Name)             -ForegroundColor Cyan
 Write-Host (' Template : {0}' -f $Template)                                   -ForegroundColor Cyan
 Write-Host (' Location : {0}' -f $projectDir)                                 -ForegroundColor Cyan
 Write-Host '================================================================' -ForegroundColor Cyan
@@ -116,7 +116,7 @@ Write-Host '================================================================' -F
 #    our offline feed.
 Write-Section 'Writing project-local NuGet.config (<clear /> + offline feed)'
 Copy-Item -Path $tmpl -Destination (Join-Path $projectDir 'NuGet.config') -Force
-Write-Host ' OK : NuGet.config (only PlaywrightOfflineFeed is visible to this project)'
+Write-Host ' OK : NuGet.config (only ferry-playwright-feed is visible to this project)'
 
 Push-Location $projectDir
 try {

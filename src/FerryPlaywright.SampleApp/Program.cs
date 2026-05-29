@@ -1,7 +1,7 @@
 using System.Text;
 using Microsoft.Playwright;
 
-// PlaywrightSampleApp — Hello-World self-test for the offline Playwright package.
+// FerryPlaywright.SampleApp — Hello-World self-test for the ferry-playwright offline package.
 //
 // 模式：
 //   * 互動模式 (預設)         ：開啟 Edge 顯示內嵌的 Hello-World 頁面，跑斷言，等待 Enter 後關閉。
@@ -9,7 +9,7 @@ using Microsoft.Playwright;
 //                                Headless、不等待輸入、執行完立即退出 (0=PASS, 1=FAIL)。
 //   * 使用者帶入 URL           ：第一個位置引數若是 URL，則改瀏覽該 URL（不跑斷言、只印 title）。
 
-Console.WriteLine("PlaywrightSampleApp — Hello-World offline smoke test");
+Console.WriteLine("FerryPlaywright.SampleApp — Hello-World offline smoke test");
 Console.WriteLine("----------------------------------------------------");
 
 bool ciMode = args.Contains("--ci")

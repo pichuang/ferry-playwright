@@ -5,10 +5,10 @@
 .DESCRIPTION
     Thin wrapper around setup-devpack.ps1. From v0.6.0 onward there is no
     "runtime" portion to install: the ZIP no longer ships a precompiled
-    PlaywrightSampleApp.exe. After running this script:
+    FerryPlaywright.SampleApp.exe. After running this script:
 
       - Bundled .nupkg files live under %USERPROFILE%\.nuget\packages
-      - Machine-level NuGet.Config registers PlaywrightOfflineFeed
+      - Machine-level NuGet.Config registers ferry-playwright-feed
       - Machine env vars PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1,
         PLAYWRIGHT_BROWSERS_PATH=0 are set
       - You can `cd samples\hello-nunit; dotnet test --settings .runsettings`
@@ -51,7 +51,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host ''
 Write-Host '================================================================' -ForegroundColor Cyan
-Write-Host ' Playwright Offline — setup (dev pack)'                            -ForegroundColor Cyan
+Write-Host ' ferry-playwright Offline — setup (dev pack)'                       -ForegroundColor Cyan
 Write-Host '================================================================' -ForegroundColor Cyan
 Write-Host ''
 

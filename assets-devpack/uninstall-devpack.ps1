@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Uninstall the Playwright offline NuGet dev pack from this machine.
+    Uninstall the ferry-playwright offline NuGet dev pack from this machine.
 #>
 
 [CmdletBinding()]
 param(
     [string]$FeedDir = (Join-Path $env:USERPROFILE '.nuget\packages'),
-    [string]$SourceName = 'PlaywrightOfflineFeed'
+    [string]$SourceName = 'ferry-playwright-feed'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,16 +38,19 @@ function Invoke-SelfElevate {
 
 # ---------- entry ----------
 
-Write-Section 'Playwright Offline Dev Pack Uninstaller'
+Write-Section 'ferry-playwright Offline Dev Pack Uninstaller'
 
 if (-not (Test-IsAdmin)) { Invoke-SelfElevate }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $indexFile = Join-Path $scriptDir 'nuget\INDEX.txt'
-$sentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$sentinelName = 'ferry-playwright-feed.INDEX.txt'
 $sentinelPath = Join-Path $FeedDir $sentinelName
+# v0.6.x sentinel filename — read it too so uninstall covers older installs.
+$legacySentinelName = 'PlaywrightOfflineFeed.INDEX.txt'
+$legacySentinelPath = Join-Path $FeedDir $legacySentinelName
 
-# Step 1 — unregister NuGet source
+# Step 1 — unregister NuGet source (current + legacy v0.6.x key)
 $nugetConfig = Join-Path $env:ProgramData 'NuGet\NuGet.Config'
 if (Test-Path $nugetConfig) {
     Write-Section 'Removing NuGet source'
@@ -55,11 +58,15 @@ if (Test-Path $nugetConfig) {
         [xml]$cfg = Get-Content $nugetConfig
         $packageSources = $cfg.configuration.SelectSingleNode('packageSources')
         if ($packageSources) {
-            $existing = @($packageSources.SelectNodes("add[@key='$SourceName']"))
-            foreach ($n in $existing) { $packageSources.RemoveChild($n) | Out-Null }
+            foreach ($key in @($SourceName, 'PlaywrightOfflineFeed') | Select-Object -Unique) {
+                $existing = @($packageSources.SelectNodes("add[@key='$key']"))
+                foreach ($n in $existing) {
+                    $packageSources.RemoveChild($n) | Out-Null
+                    Write-Host (" - Removed <{0}> from {1}" -f $key, $nugetConfig)
+                }
+            }
         }
         $cfg.Save($nugetConfig)
-        Write-Host (" - Removed <{0}> from {1}" -f $SourceName, $nugetConfig)
     } catch {
         Write-Warning "Could not parse $nugetConfig - leaving untouched. Error: $_"
     }
@@ -103,6 +110,22 @@ if ($lines) {
         Remove-Item -Path $sentinelPath -Force
         Write-Host " - $sentinelName (sentinel)"
     }
+}
+
+# Also delete the legacy v0.6.x sentinel (and its listed nupkgs) if it lingered.
+if (Test-Path $legacySentinelPath) {
+    Write-Host " Cleaning legacy v0.6.x sentinel: $legacySentinelPath"
+    $legacyLines = Get-Content $legacySentinelPath
+    foreach ($raw in $legacyLines) {
+        $line = $raw.Trim()
+        if (-not $line -or $line.StartsWith('#')) { continue }
+        $candidate = Join-Path $FeedDir $line
+        if (Test-Path $candidate) {
+            Remove-Item -Path $candidate -Force
+            Write-Host (" - {0}" -f $line)
+        }
+    }
+    try { Remove-Item -Path $legacySentinelPath -Force } catch { }
 }
 
 Write-Section 'Dev pack uninstalled'

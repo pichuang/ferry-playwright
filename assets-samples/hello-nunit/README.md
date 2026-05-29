@@ -1,6 +1,6 @@
-# hello-nunit — Playwright + NUnit 離線範例
+# hello-nunit — ferry-playwright + NUnit 離線範例
 
-這是 `PlaywrightOffline-*.zip` 內附的離線範例專案。**完全不需連網**即可
+這是 `ferry-playwright-*.zip` 內附的離線範例專案。**完全不需連網**即可
 restore / build / test，前提是這台機器已經跑過 `setup.ps1`
 （或 `setup-devpack.ps1`）把 dev pack 安裝完畢。
 
@@ -26,7 +26,7 @@ dotnet test --settings .runsettings
 
 | 檔案 | 用途 |
 |---|---|
-| `NuGet.config` | `<clear />` + 只留 `PlaywrightOfflineFeed`，覆蓋所有繼承來源 |
+| `NuGet.config` | `<clear />` + 只留 `ferry-playwright-feed`，覆蓋所有繼承來源 |
 | `hello-nunit.csproj` | TargetFramework `net10.0`，PackageReference 全部 pin 到 dev pack bundle 版本 |
 | `HelloPlaywrightTests.cs` | 範例測試：載入 inline HTML，驗證標題 / 元素 |
 | `.runsettings` | Playwright 走 Edge channel，headless |

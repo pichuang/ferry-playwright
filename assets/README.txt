@@ -1,4 +1,4 @@
-﻿Playwright 離線安裝包 — 使用說明
+ferry-playwright 離線安裝包 — 使用說明
 ================================
 
 這份壓縮檔解開後就可以在 **完全沒有網路** 的 Windows 機器上：
@@ -8,7 +8,7 @@
   (2) 拿到三個現成的 sample 原始碼專案，直接 `dotnet build` / `dotnet test`
       就能跑起來，作為你寫離線 Playwright 測試的起點範本。
 
->> 從 v0.6.0 起 ZIP **不再附** 預先編譯好的 PlaywrightSampleApp.exe，
+>> 從 v0.6.0 起 ZIP **不再附** 預先編譯好的 FerryPlaywright.SampleApp.exe，
    也不再建立 Start Menu / 桌面捷徑；改成提供你看得到、改得動的原始碼。
 
 
@@ -56,7 +56,7 @@
   3. 腳本會：
         - 把所有 .nupkg 複製到 NuGet 預設的使用者 package 資料夾
           (%USERPROFILE%\.nuget\packages)
-        - 在機器層 NuGet.Config 加一條 PlaywrightOfflineFeed 來源
+        - 在機器層 NuGet.Config 加一條 ferry-playwright-feed 來源
           （備份既有檔案為 .bak.YYYYMMDD-HHMMSS），預設停用 nuget.org
         - 設機器層環境變數
               PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
@@ -114,7 +114,7 @@
 ------------
   在原解壓資料夾，**雙擊「點擊兩下-解除安裝.cmd」**，會：
 
-    - 從機器層 NuGet.Config 移除 PlaywrightOfflineFeed 來源
+    - 從機器層 NuGet.Config 移除 ferry-playwright-feed 來源
     - 依 INDEX.txt 清單只刪掉我們塞進去的 .nupkg（不會誤刪其他
       NuGet cache 內容）
     - 清環境變數 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD / PLAYWRIGHT_BROWSERS_PATH
@@ -135,7 +135,7 @@
         - 用我們的 helper 建專案最穩：
               & ".\new-playwright-project.ps1" -Name MyTests
           它會在新專案根目錄寫一份 NuGet.config，含 <clear /> 把所有繼承的
-          source 都清掉，只留 PlaywrightOfflineFeed。
+          source 都清掉，只留 ferry-playwright-feed。
         - 已經建好的專案要修：複製本 ZIP 內 NuGet.config.template
           到專案根目錄改名 NuGet.config，再 dotnet restore 即可。
 
@@ -147,15 +147,15 @@
           之後就會回到離線 feed + nuget.org 混合模式。
 
   * 想在 Visual Studio 看到這些套件
-        - setup.ps1 會把 PlaywrightOfflineFeed 註冊到機器層 NuGet.Config，
-          [管理 NuGet 套件] → 來源選 "PlaywrightOfflineFeed" 即可。
+        - setup.ps1 會把 ferry-playwright-feed 註冊到機器層 NuGet.Config，
+          [管理 NuGet 套件] → 來源選 "ferry-playwright-feed" 即可。
 
 
 重新安裝 / 升級
 ---------------
   直接再執行一次「點擊兩下-完整安裝(推薦).cmd」即可，**不需要**先解除安裝。
 
-  - 讀取上次留下的 sentinel（PlaywrightOfflineFeed.INDEX.txt），
+  - 讀取上次留下的 sentinel（ferry-playwright-feed.INDEX.txt），
     只刪掉「同 package id 但不同版本或舊版佈局」的舊 .nupkg；其他
     NuGet cache 內容一律不動。
   - 若偵測到舊版 v0.5.x 的 C:\Program Files\PlaywrightApp\，會一併清掉。

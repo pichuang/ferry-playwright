@@ -7,10 +7,10 @@ Windows 11 / Windows Server 2022. Target machines never reach the internet durin
 
 Two .NET 10 console projects working as a pipeline:
 
-1. **`src/PlaywrightSampleApp/`** — the *payload*. Uses `Microsoft.Playwright` with
+1. **`src/FerryPlaywright.SampleApp/`** — the *payload*. Uses `Microsoft.Playwright` with
    `Channel = "msedge"` so it drives the **system-installed Edge** instead of a
    downloaded Chromium. No browser binaries are ever bundled.
-2. **`src/PlaywrightOfflinePackager/`** — the *builder*. Runs `dotnet publish -r win-x64
+2. **`src/FerryPlaywright.OfflinePackager/`** — the *builder*. Runs `dotnet publish -r win-x64
    --self-contained`, verifies the Playwright Node driver (`.playwright/node/win32_x64/node.exe`)
    came along, copies scripts from `assets/`, then zips everything into `output/`.
 
@@ -30,19 +30,19 @@ node-based Playwright driver + `install.ps1` / `uninstall.ps1` / `README.txt`.
 dotnet build
 
 # Build a single project
-dotnet build src/PlaywrightSampleApp
+dotnet build src/FerryPlaywright.SampleApp
 
 # Run the sample app interactively (opens Edge, waits for ENTER)
-dotnet run --project src/PlaywrightSampleApp -- https://example.com
+dotnet run --project src/FerryPlaywright.SampleApp -- https://example.com
 
 # Run the sample app in CI mode (headless, no readline, exits immediately)
-CI=true dotnet run --project src/PlaywrightSampleApp -- --ci
+CI=true dotnet run --project src/FerryPlaywright.SampleApp -- --ci
 
-# Produce the offline ZIP (writes to output/PlaywrightOffline-win-x64-<timestamp>.zip)
-dotnet run --project src/PlaywrightOfflinePackager
+# Produce the offline ZIP (writes to output/ferry-playwright-win-x64-<timestamp>.zip)
+dotnet run --project src/FerryPlaywright.OfflinePackager
 
 # Override packager options
-dotnet run --project src/PlaywrightOfflinePackager -- --rid win-x64 --config Release --output output
+dotnet run --project src/FerryPlaywright.OfflinePackager -- --rid win-x64 --config Release --output output
 ```
 
 There is **no test project**. The "test" is the packager's `Verify Playwright driver present`
@@ -60,7 +60,7 @@ before any release is published:
    1. Baseline-check that the runner currently has internet (avoids false-pass on a broken runner).
    2. Set `Set-NetFirewallProfile -DefaultOutboundAction Block` + a loopback allow rule.
    3. Re-verify the block by failing if `Test-NetConnection www.microsoft.com 443` succeeds.
-   4. Snapshot TCP connections, run `install.ps1`, run `PlaywrightSampleApp.exe --ci`.
+   4. Snapshot TCP connections, run `install.ps1`, run `FerryPlaywright.SampleApp.exe --ci`.
    5. Audit: any TCP tuple in the *after* snapshot that is not in the *before* snapshot and
       is not loopback/link-local → **fail the build**.
    6. **`always()`** cleanup restores the firewall **before** the audit-artifact upload
@@ -83,8 +83,8 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   or env vars `CI=true` / `PLAYWRIGHT_CI=1`. In CI mode: `Headless = true`, no
   `Console.ReadLine()`, default URL is `about:blank`. Preserve this contract — the
   workflow's offline test depends on it.
-- **Packager pipeline order** (in `src/PlaywrightOfflinePackager/Program.cs`) — produces a
-  **single combined ZIP** (`PlaywrightOffline-win-x64-<timestamp>.zip`, ~350 MB) containing
+- **Packager pipeline order** (in `src/FerryPlaywright.OfflinePackager/Program.cs`) — produces a
+  **single combined ZIP** (`ferry-playwright-win-x64-<timestamp>.zip`, ~350 MB) containing
   both runtime (`app/`) and dev pack (`nuget/`):
   1. `Restore`
   2. `Publish`
@@ -99,22 +99,20 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
   The driver-presence verification is the single most important guard — keep it. ZIP must include
   `app/.playwright/node/win32_x64/node.exe` and `nuget/microsoft.playwright.1.60.0.nupkg`.
 - **Entry scripts inside the ZIP** (all at ZIP root):
-  - `點擊兩下-完整安裝(推薦).cmd` → `setup.ps1` → chains `install.ps1` (runtime) then
-    `setup-devpack.ps1` (offline NuGet feed). One UAC prompt covers both.
-  - `點擊兩下-解除安裝.cmd` → `uninstall.ps1` → chains `uninstall-devpack.ps1` then
-    `uninstall-runtime.ps1`. Dev pack failures are non-fatal so runtime cleanup still runs.
-  - `點擊兩下-僅安裝Runtime.cmd` / `install.ps1` — runtime-only install (advanced users).
+  - `點擊兩下-完整安裝(推薦).cmd` → `setup.ps1` → `setup-devpack.ps1` (offline NuGet dev pack).
+    Self-elevates with one UAC prompt. Best-effort cleans legacy `%ProgramFiles%\PlaywrightApp`.
+  - `點擊兩下-解除安裝.cmd` → `uninstall.ps1` → chains `uninstall-devpack.ps1` then legacy cleanup.
   - `setup-devpack.ps1` / `uninstall-devpack.ps1` — dev-pack-only flow (advanced users).
-- **install.ps1** self-elevates, requires Edge unless `-SkipEdgeCheck` is passed, installs
-  to `%ProgramFiles%\PlaywrightApp`, sets *machine-scope* env vars, creates Start Menu +
-  Desktop shortcuts. Mirror any change in `uninstall-runtime.ps1`.
 - **setup-devpack.ps1** (in `assets-devpack/`) self-elevates, copies bundled `.nupkg` files
   into `%USERPROFILE%\.nuget\packages` (NuGet's default user package location),
-  registers it as `PlaywrightOfflineFeed` in `%ProgramData%\NuGet\NuGet.Config`
-  (idempotent XML edit with `.bak.YYYYMMDD-HHMMSS` backup), and idempotently sets the same
-  `PLAYWRIGHT_*` env vars as `install.ps1` so the dev pack can run standalone. Does NOT
-  disable nuget.org by default. `uninstall-devpack.ps1` removes only the .nupkg files
-  listed in `nuget/INDEX.txt` — never sweeps the shared folder.
+  registers it as `ferry-playwright-feed` in `%ProgramData%\NuGet\NuGet.Config`
+  (idempotent XML edit with `.bak.YYYYMMDD-HHMMSS` backup), sets machine-scope env vars
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` / `PLAYWRIGHT_BROWSERS_PATH=0` so the dev pack can
+  run standalone, and **disables nuget.org by default** (pass `-KeepNuGetOrg` to keep it).
+  `uninstall-devpack.ps1` removes only the .nupkg files listed in the sentinel
+  `ferry-playwright-feed.INDEX.txt` it wrote at install time — never sweeps the shared folder.
+  Both scripts also clean up the legacy v0.6.x `PlaywrightOfflineFeed` source name + sentinel
+  during upgrade.
 - **Versioning / changelog**: bumps go in `CHANGELOG.md` (Keep a Changelog style) and are
   released by pushing a `vX.Y.Z` tag. The workflow auto-generates the diff-vs-previous-tag
   block in the release body — don't try to write that part by hand.
@@ -125,9 +123,9 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
 ## When making changes — quick checklist
 
 - Touching the sample app? Keep `Channel = "msedge"` and the CI-mode branch intact, then
-  `dotnet run --project src/PlaywrightOfflinePackager` locally to confirm the ZIP still
+  `dotnet run --project src/FerryPlaywright.OfflinePackager` locally to confirm the ZIP still
   validates.
-- Touching `install.ps1` / `uninstall.ps1`? Lint with
+- Touching `setup.ps1` / `uninstall.ps1` / `setup-devpack.ps1`? Lint with
   `pwsh -NoProfile -Command "[System.Management.Automation.Language.Parser]::ParseFile(...)"`
   (no PSScriptAnalyzer is configured) and mirror changes across both scripts.
 - Touching the workflow? `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/release.yml'))"`
@@ -135,9 +133,12 @@ Triggers: push tag `v*`, or `workflow_dispatch`. The release job is gated by the
 
 ## MCP (Model Context Protocol)
 
-`.vscode/mcp.json` registers a workspace-scoped **Playwright MCP server** so VS Code
-Copilot (and other MCP-aware clients) can drive a browser during chat-based work.
+`.mcp.json` (at repo root) registers a workspace-scoped **Playwright MCP server** so
+Copilot CLI (and other MCP-aware clients like VS Code Copilot Chat) can drive a browser
+during chat-based work.
 
+- Lives at the repo root since Copilot CLI dropped support for `.vscode/mcp.json` —
+  same JSON schema.
 - Server: `@playwright/mcp@latest` launched via `npx -y` (no global install needed).
 - `--browser msedge` is hard-coded to mirror the runtime contract of this repo
   (the sample app uses `Channel = "msedge"` and never downloads Chromium).
